@@ -606,3 +606,39 @@ async def test_review_notes_do_not_spend_extra_calls_or_ask_operator(work):
     final = work.task_detail(task["id"])
     assert final["status"] == "completed" and final["calls_reserved"] == 2
     assert any(not check["passed"] and not check["blocking"] for check in final["completion_checks"]["checks"])
+
+
+@pytest.mark.parametrize("after_revision", [False, True])
+async def test_malformed_review_resume_preserves_candidate_and_source_snapshot(work, after_revision):
+    from feya.reasoning_errors import ReasoningFailure
+
+    task, event_id = await delegate(work)
+    draft = work._claim(event_id)
+    work._apply(draft, result(text="Original comparison"))
+    if after_revision:
+        review = work._claim(event_id)
+        work._apply(review, reviewed(review["request"], passed=False))
+        revision = work._claim(event_id)
+        work._apply(revision, result(text="Revised comparison"))
+    review = work._claim(event_id)
+    candidate = review["request"].candidate
+    work._fail(review, ReasoningFailure("invalid_output"))
+    failed = work.task_detail(task["id"])
+    assert failed["completion_checks"] == {}
+    work.add_source(task["conversation_id"], "New notes", "Added after the saved draft")
+    work.task_command(task["id"], "resume", failed["version"])
+    modes = []
+
+    async def review_only(request):
+        modes.append(request.mode)
+        assert request.candidate == candidate
+        assert request.sources == review["request"].sources
+        assert request.review_feedback == []
+        return reviewed(request)
+
+    await work.process_event(event_for(work, task["id"]), review_only)
+    final = work.task_detail(task["id"])
+    assert modes == ["review"]
+    assert final["status"] == "completed"
+    assert final["calls_reserved"] == failed["calls_reserved"] + 1
+    assert work.artifact(task["id"])["content"] == candidate

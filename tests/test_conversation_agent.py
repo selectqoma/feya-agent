@@ -267,3 +267,24 @@ async def test_claude_failures_have_safe_categories(monkeypatch, returncode, pay
         await ConversationClaudeRunner().run(ConversationAgentInput(mode="chat", instruction="Hello"))
     assert failure.value.code == expected
     assert "sensitive details" not in str(failure.value)
+
+
+async def test_review_treats_delegation_as_already_fulfilled():
+    captured = []
+
+    def model(messages, info):
+        captured.append(info.instructions)
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, {
+            "action": "answer", "text": "The requested comparison is present.",
+            "review": {"criteria": [{"criterion_index": 0, "passed": True, "reason": "Comparison supplied"}]},
+        })])
+
+    runner = make_runner(action="answer", text="unused")
+    runner.agent = Agent(FunctionModel(model), output_type=ConversationStep,
+                         instructions=conversation_agent.INSTRUCTIONS)
+    await runner.run(ConversationAgentInput(
+        mode="review", instruction="Compare the suppliers. Delegate this as a task.",
+        acceptance_criteria=["Compare the suppliers"], candidate="A is cheaper; B arrives earlier.",
+    ))
+    assert "application has fulfilled requests to delegate" in captured[0]
+    assert "Still assess all requested artifact content" in captured[0]

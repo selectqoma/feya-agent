@@ -66,6 +66,8 @@ The shell also supports `/reject CASE_ID`, `/recheck ACTION_ID`, `/status`, and 
 
 The browser opens in **Conversation**. Add source material, then ask, “Compare these supplier proposals and recommend one.” Feya can answer directly or create an independent background task with an objective and deliverable. Keep chatting while it runs. Delegation records concrete acceptance criteria. A candidate report is saved, then reviewed in a separate model call and checked by code before it becomes **Draft prepared**. Task details show the criteria, checks, remaining work budget, missing input and saved results; use **Update task**, **Cancel task**, or **Resume** for paused or failed work. Replies and draft previews render headings, lists, tables and code. Source citations display readable titles and open their source material. Completed results download as Markdown. Cancellation is terminal; delegate a new task to start again.
 
+Unsent messages and unfinished source forms stay with their conversation when you switch threads or sections. They are kept only in the current page; reloading or closing the tab clears them. An empty **Resume** retries a malformed or interrupted review against the saved candidate and source snapshot. A completed review with substantive failures instead resumes revision; supplying new instructions starts a fresh draft.
+
 The same work is available from the terminal:
 
 ```text

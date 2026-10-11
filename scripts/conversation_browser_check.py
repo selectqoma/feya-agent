@@ -31,6 +31,10 @@ async def main():
         "unknown_usage_calls": 1,
         "limits": {"calls": 12, "tokens": 420000, "active_seconds": 1080, "generation_calls": 4},
     }
+    case = {"id": "case_browser", "pack_id": "generic_enquiry", "customer_email": "test@example.test",
+            "subject": "Focus check", "phase": "completed", "version": 1, "summary": "",
+            "missing": [], "next_action": "Done", "facts": {}, "created_at": "2026-10-11T12:00:00Z",
+            "completion_kind": None, "actions": [], "evidence": [], "timeline": [], "runs": [], "verifications": []}
     requests = []
 
     async def route_api(route):
@@ -47,7 +51,11 @@ async def main():
                 "temporal": "connected", "backlog": 0, "packs": [],
             }
         elif path == "/cases":
-            value = []
+            value = [case]
+        elif path == "/ingest":
+            value = {"case_id": case["id"]}
+        elif path == "/cases/case_browser":
+            value = case
         elif path == "/conversations":
             value = [conversation] if requests else []
             if data:
@@ -95,10 +103,32 @@ async def main():
         await page.get_by_label("Paste notes or document text").fill(
             "Supplier A: €100, delivery Monday. Supplier B: €120, delivery Friday."
         )
+        await page.get_by_label("Message Feya").fill("Unsent new conversation")
+        await page.get_by_role("button", name="Today", exact=True).click()
+        assert not await page.get_by_label("Message Feya").is_visible()
+        await page.get_by_role("button", name="Conversation", exact=True).click()
+        assert await page.get_by_label("Message Feya").input_value() == "Unsent new conversation"
+        assert await page.get_by_label("Source title").input_value() == "Supplier proposals"
+        assert "Supplier A" in await page.get_by_label("Paste notes or document text").input_value()
         await page.locator(".conversation-source-form").get_by_role("button", name="Add source", exact=True).click()
         await page.get_by_text("Supplier proposals", exact=True).last.wait_for()
         await page.get_by_label("Message Feya").fill("Compare these suppliers and recommend one.")
         await page.get_by_role("button", name="Send", exact=True).click()
+        await page.get_by_label("Message Feya").fill("Existing thread draft")
+        await page.get_by_role("button", name="Add source", exact=True).click()
+        await page.get_by_label("Source title").fill("Unfinished source")
+        await page.get_by_label("Paste notes or document text").fill("Keep these notes")
+        await page.get_by_role("button", name="New conversation", exact=True).click()
+        assert await page.get_by_label("Message Feya").input_value() == ""
+        await page.get_by_label("Message Feya").fill("Separate new thread draft")
+        await page.get_by_label("Choose conversation").select_option("conversation_browser")
+        assert await page.get_by_label("Message Feya").input_value() == "Existing thread draft"
+        assert await page.get_by_label("Source title").input_value() == "Unfinished source"
+        assert await page.get_by_label("Paste notes or document text").input_value() == "Keep these notes"
+        await page.get_by_role("button", name="New conversation", exact=True).click()
+        assert await page.get_by_label("Message Feya").input_value() == "Separate new thread draft"
+        await page.get_by_label("Choose conversation").select_option("conversation_browser")
+        await page.get_by_role("button", name="Close source form", exact=True).click()
         await page.get_by_role("button", name="View task").click()
         await page.get_by_text("Acceptance criteria", exact=True).wait_for(timeout=10000)
         await page.get_by_text("Compare prices and delivery dates", exact=True).wait_for()
@@ -179,6 +209,29 @@ async def main():
         await page.get_by_text("This task was cancelled.", exact=False).wait_for()
         assert await page.get_by_role("button", name="Resume", exact=True).count() == 0
         assert await page.get_by_label("Additional instructions").count() == 0
+        await page.get_by_role("button", name="All cases", exact=True).click()
+        for opener in [page.locator(".case-link"), page.get_by_role("button", name="Open Focus check", exact=True)]:
+            for close in ["escape", "button"]:
+                await opener.focus()
+                await page.keyboard.press("Enter")
+                await page.get_by_role("dialog", name="Case detail").wait_for()
+                assert await page.get_by_role("button", name="Close case detail").evaluate("el => el === document.activeElement")
+                if close == "escape":
+                    await page.keyboard.press("Escape")
+                else:
+                    await page.get_by_role("button", name="Close case detail").click()
+                await page.get_by_role("dialog", name="Case detail").wait_for(state="detached")
+                assert await opener.evaluate("el => el === document.activeElement")
+        new_enquiry = page.get_by_role("button", name="New enquiry", exact=True)
+        await new_enquiry.click()
+        await page.get_by_label("Customer email").fill("new@example.test")
+        await page.get_by_label("Subject", exact=True).fill("New case focus")
+        await page.get_by_label("Message", exact=True).fill("Synthetic case")
+        await page.get_by_role("button", name="Create case", exact=True).click()
+        await page.get_by_role("dialog", name="Case detail").wait_for()
+        await page.keyboard.press("Escape")
+        await page.get_by_role("dialog", name="Case detail").wait_for(state="detached")
+        assert await new_enquiry.evaluate("el => el === document.activeElement")
         assert errors == [], errors
         await browser.close()
     print("Conversation browser checks passed: source, delegation, concurrent chat, steer, cancel, resume, result, responsive layout.")

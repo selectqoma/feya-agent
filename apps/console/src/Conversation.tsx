@@ -38,6 +38,7 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
   const current = useRef(selected); current.current = selected;
   const currentTask = useRef(taskId); currentTask.current = taskId;
   const request = useRef<{content: string; id: string} | undefined>(undefined);
+  const drafts = useRef(new Map<string, {draft: string; sourceForm: boolean; sourceTitle: string; sourceContent: string; request: typeof request.current}>());
   const log = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const task = taskDetail || detail?.tasks.find(t => t.id === taskId);
@@ -92,6 +93,7 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
   async function ensureThread(title: string) {
     if (current.current) return current.current;
     const created = await api<Thread>('/conversations', {title: title.slice(0, 100)});
+    drafts.current.delete('');
     current.current = created.id;
     setSelected(created.id);
     return created.id;
@@ -110,8 +112,12 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
   }
 
   function select(id: string) {
-    current.current = id; setSelected(id); setDraft(''); setError('');
-    setSourceForm(false); setSourceTitle(''); setSourceContent(''); request.current = undefined;
+    if (id === current.current) return;
+    drafts.current.set(current.current, {draft, sourceForm, sourceTitle, sourceContent, request: request.current});
+    const saved = drafts.current.get(id);
+    current.current = id; setSelected(id); setDraft(saved?.draft || ''); setError('');
+    setSourceForm(saved?.sourceForm || false); setSourceTitle(saved?.sourceTitle || '');
+    setSourceContent(saved?.sourceContent || ''); request.current = saved?.request;
   }
 
   async function taskAction(action: string) {

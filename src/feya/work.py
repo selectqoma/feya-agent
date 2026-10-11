@@ -229,9 +229,9 @@ class WorkService:
                 raise Conflict("Only paused or failed tasks can resume")
             if command != "cancel" and task["calls_reserved"] >= LIFETIME_CALLS:
                 raise Conflict("Task lifetime budget exhausted; delegate a new task after reviewing prior work")
-            review = command == "resume" and not instruction.strip() and bool(task["candidate_markdown"]) and task["error_code"] not in {None, "invalid_output"}
-            revise = command == "resume" and not instruction.strip() and bool(task["candidate_markdown"]) and task["completion_checks"].get("passed") is False
-            stage = "review" if review else "revise" if revise else "draft"
+            stage = "draft"
+            if command == "resume" and not instruction.strip() and task["candidate_markdown"]:
+                stage = "revise" if task["completion_checks"].get("passed") is False else "review"
             history = task["history"]
             if instruction.strip():
                 history = (history + [{"role": "user", "content": instruction}])[-10:]
@@ -239,7 +239,7 @@ class WorkService:
                 status="cancelled" if command == "cancel" else "queued",
                 version=task["version"] + 1, generation=task["generation"] + 1,
                 instruction=instruction.strip() or task["instruction"], history=history,
-                sources=task["sources"] if review else self._source_context(db, task["conversation_id"]),
+                sources=task["sources"] if stage != "draft" else self._source_context(db, task["conversation_id"]),
                 error_code="cancelled" if command == "cancel" else None, failure_message="",
                 completion_checks=task["completion_checks"] if stage != "draft" else {},
                 completion_label=None,
@@ -497,7 +497,8 @@ class WorkService:
                 # A saved candidate survives worker loss; only its independent review can complete it.
                 self._update(db, t.events, current["id"], candidate=step.text, stage="review",
                              lease_token=None, lease_until=None)
-                self._update(db, t.tasks, task["id"], candidate_markdown=step.text)
+                self._update(db, t.tasks, task["id"], candidate_markdown=step.text,
+                             completion_checks={}, completion_label=None)
                 self._progress(db, task, "candidate_saved", "Draft saved; checking acceptance criteria and evidence.")
                 return True
             else:

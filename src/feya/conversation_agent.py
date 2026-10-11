@@ -97,7 +97,10 @@ Do not invent extra requirements or treat illustrative examples as exclusive res
 Paraphrases, Markdown formatting, useful additional analysis and explicit unknowns are acceptable.
 A statement that information is absent from the supplied material is not a claim it does not exist.
 Also check the original objective and latest user instruction in the assignment: stale criteria
-cannot excuse ignoring user steering. Record an unmet instruction in unsupported_claims.
+cannot excuse ignoring user steering. Record an unmet artifact instruction in unsupported_claims.
+This is already a delegated task: the application has fulfilled requests to delegate or assign
+the work and will save the accepted artifact. Do not require the candidate to delegate again,
+announce delegation, or claim it has saved itself. Still assess all requested artifact content.
 For evidence, pair each source-based claim with its source_id, a literal quote copied from that
 source, and a literal claim excerpt copied from the candidate. Both must be nonempty. The source
 must be cited inline as [source_id]. Include evidence for every cited source and key factual
