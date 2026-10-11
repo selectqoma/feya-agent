@@ -1,0 +1,23 @@
+api_version: feya.dev/v1alpha1
+id: consulting
+version: 0.1.0
+name: Consulting proposals
+description: Capture a project brief and prepare a reviewed consulting proposal.
+currency: EUR
+tax_rate: '0.21'
+default_outbound_dispatch: deny
+require_offer_approval: true
+reply_intro: Thank you for sharing your project. Before we prepare the proposal, please confirm these details.
+required_facts:
+  - {key: service, label: Consulting package, kind: service}
+  - {key: quantity, label: Agreed consulting days, kind: quantity}
+  - {key: project_brief, label: Project brief, kind: text}
+  - {key: deliverable, label: Expected deliverable, kind: text}
+rates:
+  discovery: {label: Discovery workshop, unit_price: '750.00'}
+  advisory: {label: Advisory day, unit_price: '950.00'}
+fixture:
+  sender: sam@example.test
+  subject: A clearer customer onboarding process
+  body: "Hello, we would like to improve onboarding.\nservice: discovery\nproject_brief: Map our customer onboarding process"
+  reply: "Here is the agreed scope.\nquantity: 2\ndeliverable: Process map and a prioritised improvement plan"

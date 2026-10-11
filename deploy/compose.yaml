@@ -1,0 +1,31 @@
+name: feya-local
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: feya
+      POSTGRES_PASSWORD: feya-local
+      POSTGRES_DB: feya
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feya -d feya"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  temporal-volume:
+    image: temporalio/temporal:1.5.1
+    user: "0:0"
+    entrypoint: ["chown", "1000:1000", "/data"]
+    volumes: ["temporal:/data"]
+  temporal:
+    depends_on:
+      temporal-volume:
+        condition: service_completed_successfully
+    image: temporalio/temporal:1.5.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
+    ports: ["127.0.0.1:57233:7233", "127.0.0.1:58233:8233"]
+    volumes: ["temporal:/data"]
+volumes:
+  postgres:
+  temporal:

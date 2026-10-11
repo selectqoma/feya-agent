@@ -1,0 +1,23 @@
+api_version: feya.dev/v1alpha1
+id: generic_enquiry
+version: 0.1.0
+name: Service enquiries
+description: Turn an incomplete service request into a grounded, reviewed offer draft.
+currency: EUR
+tax_rate: '0.21'
+default_outbound_dispatch: deny
+require_offer_approval: true
+reply_intro: Thank you for your enquiry. To prepare an accurate proposal, could you confirm the following?
+required_facts:
+  - {key: service, label: Service required, kind: service}
+  - {key: quantity, label: Number of hours, kind: quantity}
+  - {key: service_date, label: Preferred service date, kind: date}
+  - {key: location, label: Service location, kind: text}
+rates:
+  onsite_service: {label: On-site service, unit_price: '85.00'}
+  assessment: {label: Site assessment, unit_price: '60.00'}
+fixture:
+  sender: alex@example.test
+  subject: Help with an on-site project
+  body: "Hello, we need some help at our new studio.\nservice: onsite_service\nlocation: 24 Example Street"
+  reply: "Thanks for getting back to me.\nquantity: 4\nservice_date: 2026-11-12"
