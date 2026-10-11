@@ -4,6 +4,8 @@ The first enquiry-to-quote demo from the supplied spec is implemented. Source is
 
 ## What works
 
+- Pixel-F terminal (`feya`) with `/setup` and `/onboard`, private company pack configuration, service controls, case inspection, exact approval/rejection and reconciliation through the existing API. The browser shares the pixel F and company name.
+
 - Case queue/detail with missing facts, source text, draft/offer preview, approval/rejection, manual handling, cancellation, JSON export, timelines, provider verification/reconciliation, pack inspection and runner status.
 - PostgreSQL migration with tenant-composite references, source-event uniqueness, atomic ingestion, case version checks, outbox, recorded runs, exact intents, approvals, execution attempts and append-only audit trigger.
 - Persistent Temporal outer case workflow, signal delivery, durable human waits, duplicate-tolerant activities and outbox replay. Database/source/approval transactions are separate from provider I/O.
@@ -17,7 +19,10 @@ The first enquiry-to-quote demo from the supplied spec is implemented. Source is
 
 | Check | Observed result |
 |---|---|
-| Backend suite against PostgreSQL | 25 passed |
+| Backend suite against PostgreSQL | 36 passed |
+| Terminal company journey | `/onboard` → `/up` → `/demo` → `/reply` → `/approve` → verified EUR 1,815 draft; passed with a synthetic company |
+| Company setup validation | Cancellation/EOF preserves files; private file mode; invalid financial inputs reprompt; running services and stale settings rejected |
+| Shared pixel F and company name | Browser rendering inspected at desktop and 390px mobile; no page errors |
 | Ruff | Passed |
 | mypy | Passed for 13 source files |
 | TypeScript + Vite production build | Passed |

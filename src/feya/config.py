@@ -15,6 +15,7 @@ class Settings:
     agent_token: str = os.getenv("FEYA_AGENT_TOKEN", "")
     tenant_id: str = os.getenv("FEYA_TENANT_ID", "tenant_demo")
     pack_dir: Path = Path(os.getenv("FEYA_PACK_DIR", "packs"))
+    company_file: Path = Path(os.getenv("FEYA_COMPANY_FILE", ".local/company.yaml"))
     console_dir: Path = Path(os.getenv("FEYA_CONSOLE_DIR", "apps/console/dist"))
     runner: str = os.getenv("FEYA_RUNNER", "fixture")
     model: str = os.getenv("FEYA_MODEL", "")

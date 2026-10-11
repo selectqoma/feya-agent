@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Activity, ArrowDownToLine, ArrowRight, Check, CheckCheck, ChevronRight, CircleHelp, Clock3, FileText, Inbox, Layers3, LayoutGrid, Link2, ListChecks, LoaderCircle, Plus, Search, Settings2, ShieldCheck, Sparkles, TriangleAlert, X } from 'lucide-react';
 import './style.css';
+import feyaMark from './feya.svg';
 
 type Phase = string;
 type Fact = {key: string; value: string; evidence_id: string; quote: string};
@@ -73,8 +74,8 @@ function App() {
   async function decide(decision: string){if(!action)return; if(fault!=='none')await api('/demo/faults/'+action.id,{mode:fault});await api('/approvals/'+action.id+'/decide',{decision,expected_digest:action.digest,reason:reason || 'Reviewed the exact offer, customer, and source facts in the local workspace'});}
   return <div className="shell">
     <aside className="sidebar" inert={!!selected || newCase}>
-      <a className="brand" href="/" aria-label="Feya home"><span className="brand-mark">f<span>✳</span></span>feya<span className="brand-dot">.</span></a>
-      <div className="workspace-switch"><span className="workspace-icon">FS</span><div><b>Feya Studio</b><small>Local workspace</small></div><ChevronRight size={15}/></div>
+      <a className="brand" href="/" aria-label="Feya home"><img className="brand-mark" src={feyaMark} alt=""/>feya<span className="brand-dot">.</span></a>
+      <div className="workspace-switch"><span className="workspace-icon" aria-hidden="true">F</span><div><b>{workspace?.name || 'Feya'}</b><small>Local workspace</small></div><ChevronRight size={15}/></div>
       <span className="nav-label">WORKSPACE</span>
       <nav>{[{id:'today',label:'Today',icon:LayoutGrid},{id:'cases',label:'All cases',icon:Inbox},{id:'approvals',label:'Approvals',icon:ShieldCheck,count:needsReview},{id:'exceptions',label:'Needs attention',icon:TriangleAlert,count:uncertain}].map(n=><button key={n.id} className={view===n.id?'nav-item active':'nav-item'} onClick={()=>nav(n.id)}><n.icon size={18}/>{n.label}{!!n.count&&<span className="nav-count">{n.count}</span>}</button>)}</nav>
       <span className="nav-label second">YOUR OPERATIONS</span>

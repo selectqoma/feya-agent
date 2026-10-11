@@ -337,7 +337,9 @@ def service_auth(authorization: str = Header(default="")):
 def create_gateway_app():
     app = FastAPI(title="Feya private execution gateway", dependencies=[Depends(service_auth)])
     service = Service(
-        make_engine(settings.database_url), load_packs(settings.pack_dir), settings.tenant_id
+        make_engine(settings.database_url),
+        load_packs(settings.pack_dir, settings.company_file),
+        settings.tenant_id,
     )
     gateway = Gateway(service, FakeProvider(service.engine, service.tenant))
 

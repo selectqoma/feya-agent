@@ -67,11 +67,17 @@ class BusinessPack(Contract):
         ).model_dump()
 
 
-def load_packs(directory: Path) -> dict[str, BusinessPack]:
+def load_company(path: Path) -> BusinessPack | None:
+    return BusinessPack.model_validate(yaml.safe_load(path.read_text())) if path.exists() else None
+
+
+def load_packs(directory: Path, company_file: Path | None = None) -> dict[str, BusinessPack]:
     packs = [
         BusinessPack.model_validate(yaml.safe_load(p.read_text()))
         for p in sorted(directory.glob("*.yaml"))
     ]
+    if company_file is not None and (company := load_company(company_file)) is not None:
+        packs.append(company)
     result = {p.id: p for p in packs}
     if not result or len(result) != len(packs):
         raise ValueError("Business packs missing or IDs duplicated")

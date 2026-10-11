@@ -8,6 +8,8 @@ Local human identity is a fixed development operator. Requests require an exact 
 
 Audit rows reject UPDATE/DELETE through a PostgreSQL trigger. The development database owner can still change database schema or disable that trigger; this is not a tamper-proof production audit store. Case and evidence references have composite tenant foreign keys, and all service queries are scoped.
 
+Company setup writes `.local/company.yaml` with owner-only permissions and atomic replacement. It requires app processes to be stopped before changing rules; restart all services to load the same pack. This file contains configuration, not credentials, and is excluded from Git. The terminal escapes control characters in displayed source data and uses the same exact-action approval endpoint as the browser.
+
 Model credentials stay outside source control. `.env` is local and mode 0600. No provider error bodies, credentials or message content are written to the run audit. Source messages are still stored in the local PostgreSQL database; encryption, retention/export/deletion beyond case JSON export are not production-ready.
 
 ## Report a vulnerability

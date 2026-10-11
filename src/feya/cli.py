@@ -212,38 +212,88 @@ async def doctor():
 
 def main():
     parser = argparse.ArgumentParser(prog="feya")
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
+    sub.add_parser("shell", help="Open the interactive Feya terminal")
+    sub.add_parser("setup", aliases=["onboard"], help="Configure the local company")
     sub.add_parser("init").add_argument("--demo", action="store_true")
     sub.add_parser("up").add_argument("--skip-infra", action="store_true")
     sub.add_parser("down")
-    sub.add_parser("doctor")
-    sub.add_parser("demo").add_argument("--pack", default="generic_enquiry")
+    sub.add_parser("doctor", aliases=["status"])
+    sub.add_parser("demo").add_argument("--pack")
+    sub.add_parser("cases")
+    for command in ("case", "reply", "approve", "reject", "recheck"):
+        sub.add_parser(command).add_argument("identifier")
     pack = sub.add_parser("pack")
     pack.add_argument("action", choices=["validate"])
     pack.add_argument("directory", nargs="?", default="packs")
     sub.add_parser("test")
     args = parser.parse_args()
+    if args.command == "shell" or (args.command is None and sys.stdin.isatty()):
+        from feya.terminal import shell
+
+        shell(ROOT)
+        return
+    if args.command is None:
+        parser.print_help()
+        return
     load_environment()
-    if args.command == "init":
+    if args.command in {"setup", "onboard"}:
+        from feya.config import settings
+        from feya.onboarding import setup
+
+        os.chdir(ROOT)
+        setup(ROOT, settings.company_file, settings.pack_dir)
+    elif args.command == "init":
         init()
     elif args.command == "up":
         up(args.skip_infra)
     elif args.command == "down":
         down()
-    elif args.command == "doctor":
+    elif args.command in {"doctor", "status"}:
         sys.exit(0 if asyncio.run(doctor()) else 1)
     elif args.command == "pack":
         from feya.packs import load_packs
 
         packs = load_packs(Path(args.directory))
         print("Validated: " + ", ".join(f"{p.id}@{p.version}" for p in packs.values()))
-    elif args.command == "demo":
-        import httpx
+    elif args.command in {"demo", "cases", "case", "reply", "approve", "reject", "recheck"}:
+        from feya.config import settings
+        from feya.terminal import operate
 
-        response = httpx.post(
-            "http://127.0.0.1:8010/v1/demo/" + args.pack, json={}, headers={"X-Feya-Local": "1"}
+        os.chdir(ROOT)
+        operate(
+            args.command,
+            getattr(args, "pack", None) or getattr(args, "identifier", None),
+            settings.company_file,
+            settings.tenant_id,
         )
-        response.raise_for_status()
-        print(json.dumps(response.json(), indent=2))
     elif args.command == "test":
         sys.exit(subprocess.call([sys.executable, "-m", "pytest", "-q"], cwd=ROOT))
+
+
+def entrypoint():
+    import httpx
+
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        print("\nCancelled.")
+        sys.exit(130)
+    except httpx.HTTPStatusError as exc:
+        print(
+            f"Request rejected ({exc.response.status_code}); no success claimed.", file=sys.stderr
+        )
+        sys.exit(1)
+    except httpx.RequestError:
+        print(
+            "Local API unavailable or request interrupted. Use feya status; inspect the case before retrying a write.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except (ValueError, OSError) as exc:
+        print(f"Feya: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    entrypoint()

@@ -1,5 +1,7 @@
 # Feya Agent
 
+<img src="apps/console/src/feya.svg" width="35" height="45" alt="Feya pixel F"/>
+
 [![Checks](https://github.com/selectqoma/feya-agent/actions/workflows/check.yml/badge.svg)](https://github.com/selectqoma/feya-agent/actions/workflows/check.yml)
 
 A local business workspace that turns customer enquiries into evidence-linked cases, prepares replies and offers, and verifies provider outcomes before calling the work complete.
@@ -37,6 +39,28 @@ uv run feya pack validate packs
 If Docker Desktop's credential helper stalls while pulling public images, unlock or repair its keychain configuration. `feya up --skip-infra` starts the application when PostgreSQL and Temporal are already running at the configured addresses. Inspect `.local/*.log` when `feya doctor` reports a failure.
 
 `feya down` leaves infrastructure running. To stop it without deleting data, run `docker compose -f deploy/compose.yaml stop`. After changing frontend code, run `npm --prefix apps/console run build`; startup reuses an existing build. The quickstart uses host processes and Unix utilities; Windows users should use a Linux environment such as WSL2.
+
+## Operate from the terminal
+
+Run `uv run feya` in an interactive terminal to open the pixel-F command shell. Existing one-shot commands remain available; `uv run feya --help` lists them. Tab completes slash commands, `NO_COLOR=1` disables color, and the interface has no animations or saved command history.
+
+```text
+/setup                 Configure your company (alias: /onboard)
+/up                    Start local services
+/demo                  Create a synthetic case using the company pack
+/cases                 Find the case ID and current status
+/case CASE_ID          Inspect the case and its evidence
+/reply CASE_ID         Simulate the customer's missing information
+/approve CASE_ID       Review the exact offer, then confirm and explain
+/case CASE_ID          Check the verified outcome
+/exit                  Leave the shell; services keep running
+```
+
+Use `/down` before `/setup` if the app is already running. Setup asks for a company name, one of the two workflow templates, currency, tax fraction and service prices. It previews the settings before saving. The file `.local/company.yaml` is private to the local user and ignored by Git; it contains no credentials. The browser shows the company name and offers its pack when creating an enquiry. `/demo` defaults to this pack.
+
+Re-running setup edits the same company pack; changed rules invalidate its pending proposals. Start all services again with `/up`. Built-in demo packs and existing cases remain available. This configures one existing local workspace, not separate production tenants. Template facts and service names currently come from the selected pack; model-account selection remains in `.env` as described below.
+
+The shell also supports `/reject CASE_ID`, `/recheck ACTION_ID`, `/status`, and `/help`. Every approval uses the same exact-action digest and server validation as the browser. An accepted decision is not a claim of successful execution; inspect the case for provider verification. This is a command interface, not natural-language chat.
 
 ## Try the complete journey
 

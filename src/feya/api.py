@@ -11,7 +11,7 @@ from feya.config import Settings, settings
 from feya.db import make_engine, scope
 from feya.domain import CaseCommand, Decision, Fault, Inbound, Proposal, uid
 from feya.gateway import FakeProvider
-from feya.packs import load_packs
+from feya.packs import load_company, load_packs
 from feya.service import Conflict, Denied, NotFound, Service
 
 
@@ -23,8 +23,11 @@ def create_app(config: Settings = settings, service: Service | None = None):
         )
     app = FastAPI(title="Feya", version="0.1.0")
     s = service or Service(
-        make_engine(config.database_url), load_packs(config.pack_dir), config.tenant_id
+        make_engine(config.database_url),
+        load_packs(config.pack_dir, config.company_file),
+        config.tenant_id,
     )
+    company = load_company(config.company_file)
     app.state.service = s
 
     @app.middleware("http")
@@ -86,7 +89,8 @@ def create_app(config: Settings = settings, service: Service | None = None):
         except Exception:
             temporal = "unavailable"
         return {
-            "name": "Feya Studio",
+            "name": company.name if company else "Feya Studio",
+            "company_pack_id": company.id if company else None,
             "tenant_id": s.tenant,
             "identity": "local-operator",
             "role": "approver",

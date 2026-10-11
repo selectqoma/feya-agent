@@ -29,7 +29,7 @@ An onboarding or support-resolution workflow is future work, not something arbit
 
 ## Process boundaries
 
-The API serves the local React workspace. A trusted worker coordinates case processing. The reasoning service has its own token and model authentication; the gateway has a different token. Only the gateway implements the simulated business-provider writes.
+The API serves the local React workspace and the command terminal. `feya` opens the terminal; `/setup` saves a validated company pack in ignored `.local/company.yaml`. API, worker and gateway load that same pack on startup. The terminal checks that the running company matches local configuration before operating on cases. A trusted worker coordinates case processing. The reasoning service has its own token and model authentication; the gateway has a different token. Only the gateway implements the simulated business-provider writes.
 
 These are local process boundaries, not a production sandbox. The development database role has broad privileges, the operator identity is fixed, and production network isolation is absent. See [SECURITY.md](../SECURITY.md) before changing deployment assumptions.
 

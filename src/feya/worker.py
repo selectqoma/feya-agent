@@ -115,7 +115,9 @@ async def main():
     if not settings.agent_token or not settings.gateway_token:
         raise RuntimeError("Set FEYA_AGENT_TOKEN and FEYA_GATEWAY_TOKEN before starting workers")
     service = Service(
-        make_engine(settings.database_url), load_packs(settings.pack_dir), settings.tenant_id
+        make_engine(settings.database_url),
+        load_packs(settings.pack_dir, settings.company_file),
+        settings.tenant_id,
     )
     for attempt in range(30):
         try:
