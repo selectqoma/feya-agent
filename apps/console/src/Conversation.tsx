@@ -3,6 +3,7 @@ import { ArrowDownToLine, ArrowUp, Check, FileText, ListChecks, LoaderCircle, Me
 import feyaMark from './feya.svg';
 import feyaWordmark from './feya-wordmark.svg';
 import './conversation.css';
+import Markdown from './Markdown';
 
 type Api = <T>(path: string, body?: unknown) => Promise<T>;
 type Thread = {id: string; title: string};
@@ -10,7 +11,7 @@ type Message = {id: string; role: string; content: string; task_id?: string; cre
 type Source = {id: string; title: string; content: string};
 type Progress = {id: string; kind: string; content: string; created_at: string};
 type CompletionChecks = {passed: boolean; label: string; checks: {name: string; passed: boolean; detail: string; blocking?: boolean}[]};
-type Task = {id: string; objective: string; deliverable: string; status: string; version: number; progress?: Progress[]; result_markdown?: string;
+type Task = {sources?: Source[]; id: string; objective: string; deliverable: string; status: string; version: number; progress?: Progress[]; result_markdown?: string;
   acceptance_criteria?: string[]; candidate_markdown?: string; completion_checks?: Partial<CompletionChecks>; completion_label?: string;
   error_code?: string; failure_message?: string; calls_reserved?: number; tokens_reserved?: number; seconds_reserved?: number;
   unknown_usage_calls?: number; limits?: {calls: number; tokens: number; active_seconds: number; generation_calls: number}; next_attempt_at?: string; can_resume?: boolean};
@@ -40,6 +41,8 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
   const log = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const task = taskDetail || detail?.tasks.find(t => t.id === taskId);
+  const sources = [...new Map([...(detail?.sources || []), ...(detail?.tasks.flatMap(t => t.sources || []) || []),
+    ...(taskDetail?.sources || [])].map(source => [source.id, source])).values()];
 
   async function refresh() {
     const list = await api<Thread[]>('/conversations');
@@ -139,7 +142,7 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
         }}>
           {loading || (selected && !detail) ? <div className="loading"><LoaderCircle size={20} className="spin"/>Loading conversation…</div>
             : !detail?.messages.length ? <div className="conversation-welcome"><img src={feyaWordmark} alt="feya"/><span className="overline">YOUR COMPANY ASSISTANT</span><h2>What shall we work on?</h2><p>Think something through together, or hand over a task. Feya keeps track while you carry on.</p><div className="conversation-starters">{['Help me plan a customer onboarding process.', 'Compare the suppliers in my notes and recommend one.', 'Turn my meeting notes into a follow-up draft.'].map(text => <button key={text} onClick={() => setDraft(text)}>{text}<ArrowUp size={14}/></button>)}</div></div>
-              : detail.messages.map(m => <article key={m.id} className={'conversation-message role-' + m.role}><div className="message-author">{m.role === 'assistant' ? <img src={feyaMark} alt=""/> : null}<b>{m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Feya' : 'Task update'}</b><time dateTime={m.created_at}>{new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</time></div><div className="message-content">{m.content}</div>{m.task_id && <button className="text-button" onClick={() => {setTaskId(m.task_id!); setTaskDetail(undefined); setInstruction('');}}>View task <ListChecks size={14}/></button>}</article>)}
+              : detail.messages.map(m => <article key={m.id} className={'conversation-message role-' + m.role}><div className="message-author">{m.role === 'assistant' ? <img src={feyaMark} alt=""/> : null}<b>{m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Feya' : 'Task update'}</b><time dateTime={m.created_at}>{new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</time></div>{m.role === 'assistant' ? <Markdown text={m.content} sources={sources}/> : <div className="message-content">{m.content}</div>}{m.task_id && <button className="text-button" onClick={() => {setTaskId(m.task_id!); setTaskDetail(undefined); setInstruction('');}}>View task <ListChecks size={14}/></button>}</article>)}
         </div>
         <div className="conversation-compose-area">
           {!!detail?.pending && <p className="conversation-pending" role="status"><LoaderCircle size={13} className="spin"/>Feya is working on your message. You can keep chatting.</p>}
@@ -167,16 +170,16 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
           {task.limits && <details className="task-budget"><summary>Work budget · {task.calls_reserved ?? 0}/{task.limits.calls} requests</summary><p>Across all attempts, reviews and resumptions.</p><dl><dt>Reserved tokens</dt><dd>{(task.tokens_reserved ?? 0).toLocaleString()} / {task.limits.tokens.toLocaleString()}</dd><dt>Reserved execution time</dt><dd>{task.seconds_reserved ?? 0} / {task.limits.active_seconds} seconds</dd></dl><p>Reservations include interrupted calls. {task.unknown_usage_calls ?? 0} calls have unconfirmed usage. Subscription allowance is not available here.</p></details>}
           {!!task.completion_checks?.checks?.length && <details className="task-checks" open={task.completion_checks.passed === false}><summary>{task.completion_checks.passed ? 'Draft review complete' : 'Draft needs revision'}</summary><ul>{task.completion_checks.checks.map((check, i) => <li key={i}><b>{check.passed ? 'Passed' : check.blocking === false ? 'Review note' : 'Needs attention'} · {label(check.name)}</b><span>{check.detail}</span></li>)}</ul><p>Includes a separate model review and code checks. These do not certify factual accuracy or an external outcome.</p></details>}
           {task.completion_label === 'legacy_unreviewed' && <p>This result predates completion checks and has not been reviewed by the new checker.</p>}
-          {task.status !== 'completed' && task.candidate_markdown && <details><summary>Read unapproved draft</summary><div className="message-content">{task.candidate_markdown}</div></details>}
+          {task.status !== 'completed' && task.candidate_markdown && <details><summary>Read unapproved draft</summary><Markdown text={task.candidate_markdown} sources={sources}/></details>}
           {task.status === 'completed' && task.completion_label === 'draft_prepared' && <p>Draft prepared. Review the findings before use; no external action was performed.</p>}
 
-          {task.status === 'completed' && <><a className="text-button" href={'/v1/tasks/' + task.id + '/artifact'} download><ArrowDownToLine size={14}/>Download result</a>{task.result_markdown && <details><summary>Read result</summary><div className="message-content">{task.result_markdown}</div></details>}</>}
+          {task.status === 'completed' && <><a className="text-button" href={'/v1/tasks/' + task.id + '/artifact'} download><ArrowDownToLine size={14}/>Download result</a>{task.result_markdown && <details><summary>Read result</summary><Markdown text={task.result_markdown} sources={sources}/></details>}</>}
           {task.status === 'cancelled' && <p>This task was cancelled. Start a new task in the conversation to continue the work.</p>}
           {!['completed', 'cancelled'].includes(task.status) && <><label htmlFor="task-instruction">{task.status === 'waiting_for_input' ? 'Provide the missing information' : 'Additional instructions'}<textarea id="task-instruction" rows={3} value={instruction} maxLength={4000} onChange={e => setInstruction(e.target.value)} placeholder="Adjust the brief or add context…"/></label><div className="task-controls">{activeTask(task) && <button className="secondary" disabled={busy || !instruction.trim()} onClick={() => void taskAction('steer')}>Update task</button>}{['failed', 'waiting_for_input'].includes(task.status) && <button className="secondary" disabled={busy || task.can_resume === false} onClick={() => void taskAction('resume')}>Resume</button>}{activeTask(task) && <button className="text-button danger" disabled={busy} onClick={() => void taskAction('cancel')}>Cancel task</button>}</div></>}
         </section>}
-        <div className="section-title source-heading"><h2><FileText size={17}/>Source material</h2><span className="count">{detail?.sources.length || 0}</span></div>
-        {!detail?.sources.length && <p className="context-empty">Add the notes and documents Feya should use for this conversation.</p>}
-        {detail?.sources.map(s => <details className="conversation-source" key={s.id}><summary>{s.title}</summary><small>{s.id}</small><div>{s.content}</div></details>)}
+        <div className="section-title source-heading"><h2><FileText size={17}/>Source material</h2><span className="count">{sources.length}</span></div>
+        {!sources.length && <p className="context-empty">Add the notes and documents Feya should use for this conversation.</p>}
+        {sources.map(s => <details className="conversation-source" id={'source-' + s.id} key={s.id}><summary>{s.title}</summary><small>{s.id}</small><div>{s.content}</div></details>)}
       </aside>
     </div>
   </section>;

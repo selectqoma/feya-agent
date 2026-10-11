@@ -64,7 +64,7 @@ The shell also supports `/reject CASE_ID`, `/recheck ACTION_ID`, `/status`, and 
 
 ## Talk to Feya and delegate work
 
-The browser opens in **Conversation**. Add source material, then ask, “Compare these supplier proposals and recommend one.” Feya can answer directly or create an independent background task with an objective and deliverable. Keep chatting while it runs. Delegation records concrete acceptance criteria. A candidate report is saved, then reviewed in a separate model call and checked by code before it becomes **Draft prepared**. Task details show the criteria, checks, remaining work budget, missing input and saved results; use **Update task**, **Cancel task**, or **Resume** for paused or failed work. Completed results download as Markdown. Cancellation is terminal; delegate a new task to start again.
+The browser opens in **Conversation**. Add source material, then ask, “Compare these supplier proposals and recommend one.” Feya can answer directly or create an independent background task with an objective and deliverable. Keep chatting while it runs. Delegation records concrete acceptance criteria. A candidate report is saved, then reviewed in a separate model call and checked by code before it becomes **Draft prepared**. Task details show the criteria, checks, remaining work budget, missing input and saved results; use **Update task**, **Cancel task**, or **Resume** for paused or failed work. Replies and draft previews render headings, lists, tables and code. Source citations display readable titles and open their source material. Completed results download as Markdown. Cancellation is terminal; delegate a new task to start again.
 
 The same work is available from the terminal:
 
