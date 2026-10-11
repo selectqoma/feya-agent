@@ -1,14 +1,22 @@
-# Feya
+# Feya Agent
+
+[![Checks](https://github.com/selectqoma/feya-agent/actions/workflows/check.yml/badge.svg)](https://github.com/selectqoma/feya-agent/actions/workflows/check.yml)
 
 A local business workspace that turns customer enquiries into evidence-linked cases, prepares replies and offers, and verifies provider outcomes before calling the work complete.
 
-**Working local prototype, not a production release.** Based on the 11 October 2026 research/spec in [`docs/research`](docs/research/00_START_HERE.md). Independently authored in this checkout; the existing Feya/Moving Van deployment was not modified or copied.
+**Experimental business operations workspace with a bounded agent engine.** The current prototype demonstrates enquiry-to-quote workflows using simulated email and accounting providers. It is not a full CRM or a production deployment.
+
+The agent extracts source-grounded facts; deterministic application code calculates prices and controls approvals; the execution gateway verifies provider results. Business packs configure required facts and rates. Two packs demonstrate reuse of this workflow; unrelated workflows still require implementation.
+
+Read the [architecture](docs/ARCHITECTURE.md), [implementation status and roadmap](docs/BUILD_STATUS.md), or original [research and specification](docs/research/00_START_HERE.md). The specification describes the intended product, including features not yet built.
 
 ## Start locally
 
 Requirements: Python 3.12+, [uv](https://docs.astral.sh/uv/), Node 20+, Docker with Compose.
 
 ```sh
+git clone https://github.com/selectqoma/feya-agent.git
+cd feya-agent
 uv sync --locked --python 3.12
 uv run feya init --demo
 uv run feya up
@@ -26,7 +34,9 @@ uv run feya up         # resumes existing cases and workflows
 uv run feya pack validate packs
 ```
 
-If Docker Desktop's credential helper stalls while pulling **public** images, fix/unlock Docker Desktop's keychain. For this machine, images were fetched using an isolated `.local/docker` configuration; the user's global Docker configuration was not changed. Once images are present, `feya up --skip-infra` starts the application against the already-running services.
+If Docker Desktop's credential helper stalls while pulling public images, unlock or repair its keychain configuration. `feya up --skip-infra` starts the application when PostgreSQL and Temporal are already running at the configured addresses. Inspect `.local/*.log` when `feya doctor` reports a failure.
+
+`feya down` leaves infrastructure running. To stop it without deleting data, run `docker compose -f deploy/compose.yaml stop`. After changing frontend code, run `npm --prefix apps/console run build`; startup reuses an existing build. The quickstart uses host processes and Unix utilities; Windows users should use a Linux environment such as WSL2.
 
 ## Try the complete journey
 
@@ -122,4 +132,10 @@ Coverage includes concurrent duplicate ingestion/commits, exact approval binding
 
 This is an intentionally **single-workspace, loopback-only, synthetic prototype**. The local operator identity is explicit development identity, not production authentication. The database role is a local development role; process separation is not a hardened container/IAM boundary. Real Gmail/Billit/Calendar connectors, OIDC, production DB grants/egress isolation, attachments, policy rollout, generalist chat, draft editing/versioning, full competitor bake-off, and release packaging remain pending.
 
-Do not expose this API publicly or attach customer credentials to the fake providers. No license or public-release claim has been applied; the spec's IP/security/publication gates remain open. Source is maintained in the private [dimitrigraur/feya-2 repository](https://github.com/dimitrigraur/feya-2); application services and runtime data remain local.
+Do not expose this API publicly or attach customer credentials to the fake providers. Publishing the source does not establish production readiness. Application services, credentials and runtime data remain local.
+
+## Contributing, security and licensing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks and [SECURITY.md](SECURITY.md) for limitations and private vulnerability reporting.
+
+No open-source license has been granted yet. Apache-2.0 is proposed in the research and awaits the owner's decision. Public visibility alone does not grant permission to redistribute or modify the source. Dependencies retain their own licenses.

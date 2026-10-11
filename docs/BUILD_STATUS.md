@@ -1,6 +1,6 @@
 # Build status — 11 October 2026
 
-The first meaningful demo from the supplied spec is implemented and running locally at http://127.0.0.1:8010. Source: `/Users/dimitrigraur/Documents/feya-2`. The private source repository is [dimitrigraur/feya-2](https://github.com/dimitrigraur/feya-2), created at the user's request after the local build. Secrets and runtime data remain local. The older `feya-repo` working tree retained its pre-existing changes.
+The first enquiry-to-quote demo from the supplied spec is implemented. Source is published at [selectqoma/feya-agent](https://github.com/selectqoma/feya-agent) as an experimental prototype. The application runs locally at http://127.0.0.1:8010; credentials and runtime data are excluded from Git. No implementation or company data was imported from the older deployment.
 
 ## What works
 
@@ -34,11 +34,11 @@ The first meaningful demo from the supplied spec is implemented and running loca
 | Full production threat model / pentest | Not completed |
 | Hermes/n8n end-to-end comparative benchmark | Not performed; no competitive-superiority claim |
 
-Screenshots are in ignored local artifacts: `.local/workspace-desktop.png`, `.local/workspace-mobile.png`, `.local/verification-needed.png`. Reproduce with `uv run python scripts/browser_check.py`. Generated screenshots reflect the offline browser test; the currently running reasoning process is the live subscription configuration below.
+Screenshots are in ignored local artifacts: `.local/workspace-desktop.png`, `.local/workspace-mobile.png`, `.local/verification-needed.png`. Reproduce with `uv run python scripts/browser_check.py`. Generated screenshots reflect the offline browser test; the live subscription configuration used during development is recorded below.
 
-## Current local account configuration
+## Local model verification on 11 October 2026
 
-`.env` selects `FEYA_RUNNER=pydantic-ai` and `FEYA_MODEL=openai-codex:gpt-5.6-luna`, using this machine's existing account-owner Codex sign-in. New work consumes that subscription's allowance. Set `FEYA_RUNNER=fixture` and restart for offline use. The repository default remains the offline runner; `.env` and account credentials are not tracked.
+The original development machine used a local `.env` selecting `FEYA_RUNNER=pydantic-ai` and `FEYA_MODEL=openai-codex:gpt-5.6-luna`, using its account-owner Codex sign-in. Model calls consumed that subscription's allowance. Set `FEYA_RUNNER=fixture` and restart for offline use. The repository default remains the offline runner; `.env` and account credentials are not tracked.
 
 The live preparation case is **Customer journey discovery workshop** (`jordan@example.test`). It is synthetic and left awaiting operator review. Existing synthetic cases also demonstrate waiting and verified-completed states.
 
@@ -46,7 +46,7 @@ The live preparation case is **Customer journey discovery workshop** (`jordan@ex
 
 | Ticket | Status |
 |---|---|
-| FEA-001 clean repo / package / locks / CI | Local repo, Python/npm lockfiles and CI definition present. CI has not run remotely; publication/IP review open. |
+| FEA-001 clean repo / package / locks / CI | Python/npm lockfiles and CI present. Initial GitHub CI passed lint, types, all 25 backend tests and console build. Production and licensing gates remain open. |
 | FEA-002 domain models | Input/agent/artifact/pack/decision contracts and phase validator implemented; persistence uses tenant-scoped SQLAlchemy tables. Stable public entity SDK remains unfinished. |
 | FEA-003 cases/events/outbox | Implemented, including concurrent deduplication and transactional event capture. |
 | FEA-004 fake providers | Email/accounting implemented with fault injection. Calendar simulator not built. |
@@ -63,6 +63,6 @@ The live preparation case is **Customer journey discovery workshop** (`jordan@ex
 2. Harden deployment boundaries: OIDC and real roles, separate least-privilege DB users, agent/gateway network isolation, active member revocation, secret storage, durable failed-work recovery UI, immutable versioned migrations, full container packaging.
 3. Add operator fact correction and immutable draft edit/re-approval history; add explicit connector/pack SDK contracts.
 4. Add isolated staging Gmail draft/read-back first, then tentative Calendar and undispatched accounting connectors with their provider-specific identity/idempotency contracts. No live customer migration.
-5. Complete retention/attachments, supported pricing-scenario expansion, benchmark coverage, dependency/license/IP/secret-history review and independent security review before publication.
+5. Complete retention/attachments, supported pricing-scenario expansion, benchmark coverage, dependency/license/IP/secret-history review and independent security review before a supported production release.
 
 This is a substantial first local slice, not completion of every P0/P1 requirement. Default human identity, developer DB credentials and simulated verification make it inappropriate for public hosting or customer operations until the listed boundaries are implemented and tested.

@@ -10,4 +10,8 @@ Audit rows reject UPDATE/DELETE through a PostgreSQL trigger. The development da
 
 Model credentials stay outside source control. `.env` is local and mode 0600. No provider error bodies, credentials or message content are written to the run audit. Source messages are still stored in the local PostgreSQL database; encryption, retention/export/deletion beyond case JSON export are not production-ready.
 
-No public security reporting address has been established because this source has not been released publicly. Before public release, establish a private disclosure channel and complete the spec's release checklist.
+## Report a vulnerability
+
+Use [GitHub private vulnerability reporting](https://github.com/selectqoma/feya-agent/security/advisories/new). Include affected commit, reproduction steps with synthetic data, expected and observed behavior, and impact. Do not post vulnerabilities, credentials or customer data in public issues. There is no guaranteed response-time commitment for this experimental project.
+
+Only the current `main` prototype is maintained; there are no supported production releases. Public source availability does not mean the production security gates in the specification have been completed.

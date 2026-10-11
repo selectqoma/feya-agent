@@ -1,5 +1,7 @@
 name: Check local kernel
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   kernel:
     runs-on: ubuntu-latest

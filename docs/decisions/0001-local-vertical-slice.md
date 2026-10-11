@@ -23,4 +23,4 @@ The first deliverable is a complete, locally runnable case journey with the adve
 
 The installed Hermes CLI was inspected and does expose durable Kanban. A fair end-to-end Hermes/n8n build, setup-effort measurements and adversarial comparison have **not** been performed. Complete those before declaring a product advantage or committing to a public platform roadmap. The current independent implementation is a concrete comparison candidate.
 
-Apache-2.0 remains proposed, not granted. Production auth, least-privilege DB roles, write-provider network isolation, provider staging tests and rights/security review are release blockers. Local fake identity, development database credentials and simulated read-back cannot establish production safety.
+Apache-2.0 remains proposed, not granted. Production auth, least-privilege DB roles, write-provider network isolation, provider staging tests and rights/security review are supported-production-release blockers. Public source publication is an experimental preview, not a sign-off of those gates. Local fake identity, development database credentials and simulated read-back cannot establish production safety.
