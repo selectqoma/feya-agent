@@ -80,6 +80,7 @@ class ConversationAgentInput(Contract):
     observations: list[ToolObservation] = Field(default_factory=list, max_length=6)
     acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list, max_length=6)
     candidate: str = Field(default="", max_length=12000)
+    review_feedback: list[Annotated[str, Field(max_length=1500)]] = Field(default_factory=list, max_length=24)
     run_id: Identifier | None = None
     max_steps: int = Field(default=4, ge=1, le=6)
     max_input_tokens: int = Field(default=16000, ge=1, le=32000)

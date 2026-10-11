@@ -204,11 +204,11 @@ class WorkService:
         request = ConversationAgentInput(mode="task", instruction="x", max_input_tokens=32000)
         return len((INSTRUCTIONS + mode_instructions(request) + prompt_for(request)).encode()) + request.max_output_tokens
 
-    def _queue_task(self, db, task, *, review=False):
+    def _queue_task(self, db, task, *, stage="draft"):
         return self._insert(
             db, t.events, "work", conversation_id=task["conversation_id"], task_id=task["id"],
             sequence=task["generation"], generation=task["generation"], kind="task",
-            stage="review" if review else "draft", candidate=task["candidate_markdown"] if review else None,
+            stage=stage, candidate=task["candidate_markdown"] if stage != "draft" else None,
             instruction=task["instruction"], sources=task["sources"], history=task["history"],
         )
 
@@ -230,6 +230,8 @@ class WorkService:
             if command != "cancel" and task["calls_reserved"] >= LIFETIME_CALLS:
                 raise Conflict("Task lifetime budget exhausted; delegate a new task after reviewing prior work")
             review = command == "resume" and not instruction.strip() and bool(task["candidate_markdown"]) and task["error_code"] not in {None, "invalid_output"}
+            revise = command == "resume" and not instruction.strip() and bool(task["candidate_markdown"]) and task["completion_checks"].get("passed") is False
+            stage = "review" if review else "revise" if revise else "draft"
             history = task["history"]
             if instruction.strip():
                 history = (history + [{"role": "user", "content": instruction}])[-10:]
@@ -239,17 +241,17 @@ class WorkService:
                 instruction=instruction.strip() or task["instruction"], history=history,
                 sources=task["sources"] if review else self._source_context(db, task["conversation_id"]),
                 error_code="cancelled" if command == "cancel" else None, failure_message="",
-                completion_checks={} if not review else task["completion_checks"],
+                completion_checks=task["completion_checks"] if stage != "draft" else {},
                 completion_label=None,
-                candidate_markdown=task["candidate_markdown"] if review else "",
+                candidate_markdown=task["candidate_markdown"] if stage != "draft" else "",
             )
             if command != "cancel":
                 proposed = task | values
                 request = self._input({
-                    "task_id": task_id, "kind": "task", "stage": "review" if review else "draft",
+                    "task_id": task_id, "kind": "task", "stage": stage,
                     "instruction": proposed["instruction"], "history": proposed["history"],
                     "sources": proposed["sources"], "observations": [],
-                    "candidate": proposed["candidate_markdown"] if review else None,
+                    "candidate": proposed["candidate_markdown"] if stage != "draft" else None,
                     "lease_token": None,
                 }, proposed)
                 if (task["tokens_reserved"] + request.max_input_tokens + request.max_output_tokens > LIFETIME_TOKENS
@@ -259,7 +261,7 @@ class WorkService:
             task.update(values)
             self._progress(db, task, command, instruction.strip() or f"Task {command} requested")
             if command != "cancel":
-                self._queue_task(db, task, review=review)
+                self._queue_task(db, task, stage=stage)
             else:
                 self._message(db, task["conversation_id"], "assistant", "Task cancelled.", task_id=task_id)
         return self.task_detail(task_id)
@@ -358,7 +360,7 @@ class WorkService:
                     unknown_usage_calls=task["unknown_usage_calls"] + 1,
                     error_code=None, failure_message="",
                 )
-                self._progress(db, task, "reviewing" if event["stage"] == "review" else "running",
+                self._progress(db, task, {"review": "reviewing", "revise": "revising"}.get(event["stage"], "running"),
                                f"Reasoning step {event['attempts'] + 1}/{MAX_CALLS}; lifetime {task['calls_reserved'] + 1}/{LIFETIME_CALLS}")
             event["attempts"] += 1
             event["request"] = request
@@ -380,6 +382,9 @@ class WorkService:
                 mode="review" if event["stage"] == "review" else event["kind"],
                 instruction=event["instruction"], history=history + assignment,
                 candidate=event["candidate"] or "",
+                review_feedback=[check["detail"][:1500] for check in task["completion_checks"].get("checks", [])
+                                 if not check["passed"] and check.get("blocking", True)][:24]
+                                if task and event["stage"] == "revise" else [],
                 acceptance_criteria=task["acceptance_criteria"] if task else [],
                 run_id=event["lease_token"],
                 sources=event["sources"], observations=event["observations"],
@@ -450,9 +455,14 @@ class WorkService:
                 self._update(db, t.tasks, task["id"], completion_checks=checks, completion_label=checks["label"])
                 if checks["passed"]:
                     self._finish(db, current, "completed", current["candidate"])
+                elif current["attempts"] + 2 <= MAX_CALLS and task["calls_reserved"] + 2 <= LIFETIME_CALLS:
+                    self._update(db, t.events, current["id"], stage="revise", lease_token=None, lease_until=None)
+                    self._progress(db, task, "revising", "Review found issues; revising the draft automatically.")
+                    return True
                 else:
                     self._finish(db, current, "waiting_for_input",
-                        "The draft did not pass completion checks. Review its candidate and checks, then resume with corrections.",
+                        "The draft still needs attention and there is no room for another revision and review in this run. "
+                        "The candidate and findings are saved; resume to let the agent try again if task budget remains.",
                         error_code="invalid_output")
                 return False
             if step.action == "tool":

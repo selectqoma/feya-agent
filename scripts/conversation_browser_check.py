@@ -122,14 +122,15 @@ async def main():
         task.update(failure_message="", completion_label="draft_prepared", completion_checks={
             "passed": True, "label": "draft_prepared", "checks": [
                 {"name": "criteria_coverage", "passed": True, "detail": "All criteria assessed."},
-                {"name": "citation_evidence", "passed": True, "detail": "Literal source quotes checked."},
+                {"name": "citation_evidence", "passed": False, "blocking": False, "detail": "Source support assessed by the agent; excerpts did not match exactly."},
             ],
         })
         task["result_markdown"] = "Choose Supplier A: lower price and earlier delivery."
         await page.get_by_role("link", name="Download result").wait_for(timeout=10000)
         await page.get_by_text("Draft prepared", exact=True).wait_for()
-        await page.get_by_text("Draft checks passed", exact=True).click()
-        await page.get_by_text("Literal source quotes checked.", exact=True).wait_for()
+        await page.get_by_text("Draft review complete", exact=True).click()
+        await page.get_by_text("Review note · Citation evidence", exact=True).wait_for()
+        await page.get_by_text("Source support assessed by the agent; excerpts did not match exactly.", exact=True).wait_for()
         await page.get_by_text("Read result", exact=True).click()
         await page.get_by_text(task["result_markdown"], exact=True).wait_for()
         await page.set_viewport_size({"width": 390, "height": 844})

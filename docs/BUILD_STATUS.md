@@ -6,7 +6,7 @@ The enquiry-to-quote demo, conversation/delegated-task slice and first reliabili
 
 - Saved browser and CLI conversations, ordinary questions, standalone task delegation, supplied text sources and read-only case inspection. Tasks run independently of chat and need no workflow pack.
 - Task progress, missing-input waits, steering, active cancellation, paused/failed resumption, Markdown artifacts and results returned to the originating conversation.
-- Concrete acceptance criteria, persisted candidate drafts, a separate model review, and deterministic source excerpt/citation/arithmetic checks before a task becomes **Draft prepared**. Rejected candidates remain available with failed checks. Older results remain labelled unreviewed.
+- Concrete acceptance criteria, persisted candidate drafts, a separate model review, and deterministic source excerpt/citation/arithmetic checks before a task becomes **Draft prepared**. The agent automatically revises substantive failures when budget allows; exact excerpt mismatches remain advisory notes. Unresolved candidates remain available with failed checks. Older results remain labelled unreviewed.
 - Typed, redacted failures; budget-bounded persisted retry backoff for transient failures; visible recovery instructions and lifetime work reservations across resumption.
 - Separate transactional work outbox, ordered chat events, tenant-composite references, duplicate-message IDs, persisted model-call reservations, leases and generation fences against stale results. Four requests per generation, with lifetime task limits of 12 calls, 420,000 reserved tokens and 1,080 reserved active seconds; source snapshots and bounded context. Successful calls record returned token counts; interrupted or failed calls may have unknown usage.
 
@@ -25,7 +25,7 @@ The enquiry-to-quote demo, conversation/delegated-task slice and first reliabili
 
 | Check | Observed result |
 |---|---|
-| Backend suite against PostgreSQL | 180 passed |
+| Backend suite against PostgreSQL | 182 passed |
 | Conversation browser/API journey | Live payment task: acceptance criteria, passed review, lifetime budget and Markdown download from real API; desktop/mobile, no JS errors or horizontal overflow |
 | Conversation browser regression fixtures | Concurrent chat, source, progress, steering, waiting/failed resumption, terminal cancellation, download; passed |
 | Task restart / replay | SIGKILL worker while task waited for input, add source and resume while stopped, restart, review and redeliver; one checked artifact and prior lifetime reservations retained |
@@ -36,6 +36,7 @@ The enquiry-to-quote demo, conversation/delegated-task slice and first reliabili
 | Shared pixel F and company name | Browser rendering inspected at desktop and 390px mobile; no page errors |
 | Offline evaluation calibration | 24/24 scenario reference/counterexample checks; not a model-quality score |
 | Live model evaluation | 23/24 observable checks with Codex, one request per scenario; missing contract dates still triggered an unnecessary case lookup instead of asking for input |
+| Agent-owned repair | Previously rejected supplier report resumed with no new instructions; agent repaired saved draft and passed review in two calls, retaining all eight lifetime reservations |
 | Live persisted completion review | Payment summary → saved candidate → independent review → checked Markdown artifact; two task calls |
 | Live cancellation | Cancelled a running delegated task through the API; private reasoning cancellation endpoint acknowledged; no artifact published and call reservation retained |
 | SDK retry boundaries | Mock transports verified one HTTP attempt on timeout, connection failure, 429 and 503 for OpenAI, Codex and Anthropic |
@@ -64,7 +65,7 @@ The original development machine used a local `.env` selecting `FEYA_RUNNER=pyda
 
 Live testing exposed unnecessary repeated case lookups, null optional response fields, and review false rejections. The application rejects repeated tools and preserves candidates when review fails. Independent review accepted a valid supplier report and rejected an unsupported VAT assertion; this is evidence that the checks execute, not proof of semantic accuracy. The reviewer uses a separate call to the same configured model and can share its mistakes. Claims not extracted by the reviewer can escape arithmetic/evidence checks.
 
-The final full live evaluation used prompt/schema hash `031cf7d8aa7e9274`, model `openai-codex:gpt-5.6-luna`, and 24 reserved requests. Initial testing scored 16/24 before fixing two checker false positives and response/routing issues. The final 23/24 result remains a failure of the full live suite; the missing-dates case is an unresolved routing weakness, not waived. A targeted recheck had passed it, which shows model variability. A supplier comparison also required corrections and remained blocked by strict evidence-excerpt review checks. Reports stay under ignored `.local/evals/`; re-run with `--live --limit 24 --requests-per-case 1 --request-budget 24`. No competitor comparison or production-readiness inference follows from this small set.
+Before the automatic-revision increment, the full live evaluation used prompt/schema hash `031cf7d8aa7e9274`, model `openai-codex:gpt-5.6-luna`, and 24 reserved requests. Initial testing scored 16/24 before fixing two checker false positives and response/routing issues. The final 23/24 result remains a failure of the full live suite; the missing-dates case is an unresolved routing weakness, not waived. A targeted recheck had passed it, which shows model variability. A supplier comparison also required corrections and remained blocked by strict evidence-excerpt review checks. The subsequent automatic-revision increment makes those excerpt checks advisory and lets the agent repair substantive review failures itself. The previously blocked supplier report subsequently completed after an empty resume using the saved feedback, without additional operator instructions. That targeted check does not replace the full live benchmark. Reports stay under ignored `.local/evals/`; re-run with `--live --limit 24 --requests-per-case 1 --request-budget 24`. No competitor comparison or production-readiness inference follows from this small set.
 
 The live preparation case is **Customer journey discovery workshop** (`jordan@example.test`). It is synthetic and left awaiting operator review. Existing synthetic cases also demonstrate waiting and verified-completed states.
 

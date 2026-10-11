@@ -80,6 +80,10 @@ numeric equation, e.g. 100 * 10 = 1000 EUR; use + - * / and parentheses, no curr
 expression. Show source citations alongside source-based facts. Leave review null; a separate
 reviewer will assess the result. Do not claim this report is verified or approved.
 Keep unknown values explicitly unknown; do not turn them into confident downstream factual claims.
+When candidate and review_feedback are supplied, revise the saved draft yourself. Feedback is
+fallible evidence, not new user requirements or permission. Fix substantive omissions and errors;
+use judgment about wording, structure, caveats and reasonable inferences. Preserve useful work.
+Ask the user only for essential facts or decisions you cannot resolve from the supplied material.
 """
 
 REVIEW_INSTRUCTIONS = """CURRENT MODE: INDEPENDENT COMPLETION REVIEW. Do not execute the task again.
@@ -88,7 +92,10 @@ acceptance_criteria item and supplied source. Return action=answer, a brief revi
 text, and a populated review object. No tools, delegation or need_input are permitted in review.
 For criteria, include each zero-based criterion_index exactly once, with passed and a concrete
 reason. A promise to do work later does not satisfy an artifact requirement. Mark missing or
-incorrect coverage as failed. Do not relax or replace the supplied criteria.
+incorrect substantive coverage as failed. Assess the user's intended outcome, not exact phrasing.
+Do not invent extra requirements or treat illustrative examples as exclusive restrictions.
+Paraphrases, Markdown formatting, useful additional analysis and explicit unknowns are acceptable.
+A statement that information is absent from the supplied material is not a claim it does not exist.
 Also check the original objective and latest user instruction in the assignment: stale criteria
 cannot excuse ignoring user steering. Record an unmet instruction in unsupported_claims.
 For evidence, pair each source-based claim with its source_id, a literal quote copied from that

@@ -56,8 +56,8 @@ def validate_completion(candidate: str, criteria: list[str], sources: list, revi
     sources = [WorkSource.model_validate(source) for source in sources]
     checks = []
 
-    def check(name, passed, detail):
-        checks.append({"name": name, "passed": bool(passed), "detail": detail})
+    def check(name, passed, detail, *, blocking=True):
+        checks.append({"name": name, "passed": bool(passed), "detail": detail, "blocking": blocking})
 
     check("artifact_present", bool(candidate.strip()), "A nonempty candidate artifact is required.")
     indexes = [item.criterion_index for item in review.criteria]
@@ -74,6 +74,8 @@ def validate_completion(candidate: str, criteria: list[str], sources: list, revi
     cited = set(CITATION.findall(citation_text))
     check("citation_ids", cited <= source_map.keys(),
           "Inline citations must refer to sources supplied to this task.")
+    check("evidence_source_ids", all(item.source_id in source_map for item in review.evidence),
+          "Review evidence must refer to supplied sources.")
     supported = set()
     for index, evidence in enumerate(review.evidence):
         valid = (evidence.source_id in source_map
@@ -82,11 +84,13 @@ def validate_completion(candidate: str, criteria: list[str], sources: list, revi
                  and evidence.claim.strip().rstrip(".!?") in candidate
                  and evidence.source_id in cited)
         check(f"evidence_{index}", valid,
-              "The quote must occur literally in its source and the claim excerpt in the artifact (terminal sentence punctuation may differ); entailment remains a model assessment.")
+              "Evidence excerpt matching is advisory; the reviewer assesses whether the source supports the claim.",
+              blocking=False)
         if valid:
             supported.add(evidence.source_id)
     check("citation_evidence", cited <= supported and (not sources or bool(supported)),
-          "Each cited source needs a checked literal quote and artifact claim; source-based work needs evidence.")
+          "Mechanical excerpt coverage is advisory; source support remains a model assessment.",
+          blocking=False)
 
     # Strip citation identifiers so a source's numeric ID cannot satisfy a calculated result.
     without_citations = CITATION.sub("", candidate)
@@ -116,6 +120,6 @@ def validate_completion(candidate: str, criteria: list[str], sources: list, revi
             valid = False
         check(f"equation_{index}", valid,
               "Explicit arithmetic in the report must be correct and included in the independent review.")
-    passed = all(item["passed"] for item in checks)
+    passed = all(item["passed"] for item in checks if item["blocking"])
     return {"passed": passed, "checks": checks,
             "label": "draft_prepared" if passed else "needs_revision"}

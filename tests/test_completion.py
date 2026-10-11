@@ -32,9 +32,6 @@ def test_valid_report_has_review_and_deterministic_checks_but_only_draft_label()
     review(criteria=[{"criterion_index": 0, "passed": True, "reason": "Fine"}] * 2),
     review(criteria=[{"criterion_index": 1, "passed": True, "reason": "Wrong criterion"}]),
     review(criteria=[{"criterion_index": 0, "passed": False, "reason": "Missing work"}]),
-    review(evidence=[]),
-    review(evidence=[{"source_id": "src_quote", "quote": "Invented source quote", "claim": "Quoted price EUR 100"}]),
-    review(evidence=[{"source_id": "src_quote", "quote": "Unit price EUR 100.", "claim": "Invented report claim"}]),
     review(evidence=[{"source_id": "src_missing", "quote": "Unit price EUR 100.", "claim": "Quoted price EUR 100"}]),
     review(calculations=[]),
     review(calculations=[{"expression": "100 * 10", "result": "999"}]),
@@ -104,3 +101,15 @@ def test_explicit_rounding_uses_half_up_and_preserves_exact_default():
 def test_unsafe_or_unbounded_calculations_are_rejected(expression):
     with pytest.raises(ValueError):
         calculate(expression)
+
+
+@pytest.mark.parametrize("evidence", [
+    [],
+    [{"source_id": "src_quote", "quote": "Unit price: EUR 100", "claim": "Quoted price EUR 100"}],
+    [{"source_id": "src_quote", "quote": "Unit price EUR 100.", "claim": "**Quoted price EUR 100**"}],
+])
+def test_excerpt_matching_is_advisory_when_agent_accepts_substance(evidence):
+    checked = validate_completion(CANDIDATE, CRITERIA, [SOURCE], review(evidence=evidence))
+    assert checked["passed"]
+    notes = [item for item in checked["checks"] if not item["passed"]]
+    assert notes and all(item["blocking"] is False for item in notes)

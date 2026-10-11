@@ -397,7 +397,7 @@ async def test_saved_candidate_recovery_does_not_regenerate_or_duplicate_artifac
     assert work.artifact(task["id"])["content"] == "The durable draft"
 
 
-async def test_failed_review_preserves_candidate_and_requires_correction(work):
+async def test_failed_review_attempts_revision_then_preserves_candidate(work):
     task, event_id = await delegate(work)
 
     async def draft_then_fail_review(request):
@@ -411,10 +411,16 @@ async def test_failed_review_preserves_candidate_and_requires_correction(work):
     assert not current["completion_checks"]["passed"]
     with pytest.raises(Conflict):
         work.artifact(task["id"])
-    work.task_command(task["id"], "resume", current["version"], "Include the missing comparison")
-    await work.process_event(event_for(work, task["id"]), answer)
+    work.task_command(task["id"], "resume", current["version"])
+
+    async def improve(request):
+        if request.mode == "task":
+            assert request.candidate == "Weak draft" and request.review_feedback
+        return await answer(request)
+
+    await work.process_event(event_for(work, task["id"]), improve)
     final = work.task_detail(task["id"])
-    assert final["status"] == "completed" and final["calls_reserved"] == 4
+    assert final["status"] == "completed" and final["calls_reserved"] == 6
 
 
 async def test_candidate_survives_generation_budget_and_resume_only_reviews(work):
@@ -548,3 +554,55 @@ async def test_worker_http_classifies_error_and_forwards_cancel(work, service, m
     await asyncio.wait_for(cancelled.wait(), 2)
     await asyncio.wait_for(running, 2)
     assert sum(path.startswith("/conversation/cancel/") for path in requests) == 1
+
+
+async def test_agent_revises_from_persisted_review_feedback_without_user_input(work):
+    task, event_id = await delegate(work)
+    draft = work._claim(event_id)
+    assert work._apply(draft, result(text="Incomplete comparison"))
+    review_event = work._claim(event_id)
+    assert work._apply(review_event, reviewed(review_event["request"], passed=False))
+    assert work.task_detail(task["id"])["status"] == "running"
+    # A replacement worker picks up the committed repair without rerunning the first draft.
+    resumed = WorkService(work.engine, work.tenant, work.case_service)
+    modes = []
+
+    async def repair(request):
+        modes.append(request.mode)
+        if request.mode == "task":
+            assert request.candidate == "Incomplete comparison"
+            assert request.review_feedback and "Test reviewer assessment" in request.review_feedback[0]
+            assert request.instruction == "Prepare a supplier comparison"
+            return result(text="Revised complete comparison")
+        assert request.candidate == "Revised complete comparison"
+        assert request.review_feedback == []
+        return reviewed(request)
+
+    await resumed.process_event(event_id, repair)
+    await resumed.process_event(event_id, repair)
+    final = resumed.task_detail(task["id"])
+    assert modes == ["task", "review"]
+    assert final["status"] == "completed" and final["calls_reserved"] == 4
+    assert resumed.artifact(task["id"])["content"] == "Revised complete comparison"
+    assert sum(p["kind"] == "completed" for p in final["progress"]) == 1
+
+
+async def test_review_notes_do_not_spend_extra_calls_or_ask_operator(work):
+    task, event_id = await delegate(work)
+    with work.engine.begin() as db:
+        db.execute(update(t.events).where(scope(t.events, work.tenant, event_id)).values(
+            sources=[{"id": "src_note", "title": "Note", "content": "Payment within 30 days."}],
+        ))
+
+    async def draft(request):
+        if request.mode == "review":
+            return result(review={"criteria": [{"criterion_index": 0, "passed": True,
+                                                 "reason": "Substantively complete."}],
+                                  "evidence": [{"source_id": "src_note", "quote": "Payment: 30 days",
+                                                "claim": "Pay within thirty days"}]})
+        return result(text="Pay within thirty days [src_note].", citations=["src_note"])
+
+    await work.process_event(event_id, draft)
+    final = work.task_detail(task["id"])
+    assert final["status"] == "completed" and final["calls_reserved"] == 2
+    assert any(not check["passed"] and not check["blocking"] for check in final["completion_checks"]["checks"])
