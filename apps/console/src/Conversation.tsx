@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowUp, Check, FileText, ListChecks, LoaderCircle, MessageSquare, Plus, X } from 'lucide-react';
 import feyaMark from './feya.svg';
+import feyaWordmark from './feya-wordmark.svg';
 import './conversation.css';
 
 type Api = <T>(path: string, body?: unknown) => Promise<T>;
@@ -137,7 +138,7 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
           if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}>
           {loading || (selected && !detail) ? <div className="loading"><LoaderCircle size={20} className="spin"/>Loading conversation…</div>
-            : !detail?.messages.length ? <div className="conversation-welcome"><img src={feyaMark} alt=""/><span className="overline">YOUR COMPANY ASSISTANT</span><h2>What shall we work on?</h2><p>Think something through together, or hand over a task. Feya keeps track while you carry on.</p><div className="conversation-starters">{['Help me plan a customer onboarding process.', 'Compare the suppliers in my notes and recommend one.', 'Turn my meeting notes into a follow-up draft.'].map(text => <button key={text} onClick={() => setDraft(text)}>{text}<ArrowUp size={14}/></button>)}</div></div>
+            : !detail?.messages.length ? <div className="conversation-welcome"><img src={feyaWordmark} alt="feya"/><span className="overline">YOUR COMPANY ASSISTANT</span><h2>What shall we work on?</h2><p>Think something through together, or hand over a task. Feya keeps track while you carry on.</p><div className="conversation-starters">{['Help me plan a customer onboarding process.', 'Compare the suppliers in my notes and recommend one.', 'Turn my meeting notes into a follow-up draft.'].map(text => <button key={text} onClick={() => setDraft(text)}>{text}<ArrowUp size={14}/></button>)}</div></div>
               : detail.messages.map(m => <article key={m.id} className={'conversation-message role-' + m.role}><div className="message-author">{m.role === 'assistant' ? <img src={feyaMark} alt=""/> : null}<b>{m.role === 'user' ? 'You' : m.role === 'assistant' ? 'Feya' : 'Task update'}</b><time dateTime={m.created_at}>{new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</time></div><div className="message-content">{m.content}</div>{m.task_id && <button className="text-button" onClick={() => {setTaskId(m.task_id!); setTaskDetail(undefined); setInstruction('');}}>View task <ListChecks size={14}/></button>}</article>)}
         </div>
         <div className="conversation-compose-area">

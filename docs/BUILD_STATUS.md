@@ -10,7 +10,7 @@ The enquiry-to-quote demo, conversation/delegated-task slice and first reliabili
 - Typed, redacted failures; budget-bounded persisted retry backoff for transient failures; visible recovery instructions and lifetime work reservations across resumption.
 - Separate transactional work outbox, ordered chat events, tenant-composite references, duplicate-message IDs, persisted model-call reservations, leases and generation fences against stale results. Four requests per generation, with lifetime task limits of 12 calls, 420,000 reserved tokens and 1,080 reserved active seconds; source snapshots and bounded context. Successful calls record returned token counts; interrupted or failed calls may have unknown usage.
 
-- Pixel-F terminal (`feya`) with `/setup` and `/onboard`, private company pack configuration, service controls, case inspection, exact approval/rejection and reconciliation through the existing API. The browser shares the pixel F and company name.
+- Pixel Feya terminal (`feya`) with `/setup` and `/onboard`, private company pack configuration, service controls, case inspection, exact approval/rejection and reconciliation through the existing API. The browser shares the full pixel wordmark and company name.
 
 - Case queue/detail with missing facts, source text, draft/offer preview, approval/rejection, manual handling, cancellation, JSON export, timelines, provider verification/reconciliation, pack inspection and runner status.
 - PostgreSQL migration with tenant-composite references, source-event uniqueness, atomic ingestion, case version checks, outbox, recorded runs, exact intents, approvals, execution attempts and append-only audit trigger.
@@ -33,7 +33,7 @@ The enquiry-to-quote demo, conversation/delegated-task slice and first reliabili
 | Fresh and upgrade migrations | All three migrations applied in an isolated schema; upgrade from seeded revision 0002 preserved artifacts and backfilled prior usage; passed |
 | Terminal company journey | `/onboard` → `/up` → `/demo` → `/reply` → `/approve` → verified EUR 1,815 draft; passed with a synthetic company |
 | Company setup validation | Cancellation/EOF preserves files; private file mode; invalid financial inputs reprompt; running services and stale settings rejected |
-| Shared pixel F and company name | Browser rendering inspected at desktop and 390px mobile; no page errors |
+| Pixel Feya styling | Full wordmark in browser and terminal; conversation and case dashboard inspected at desktop, mobile at 390px and 320px without horizontal overflow; terminal ASCII/NO_COLOR at 40 and 80 columns |
 | Offline evaluation calibration | 24/24 scenario reference/counterexample checks; not a model-quality score |
 | Live model evaluation | 23/24 observable checks with Codex, one request per scenario; missing contract dates still triggered an unnecessary case lookup instead of asking for input |
 | Agent-owned repair | Previously rejected supplier report resumed with no new instructions; agent repaired saved draft and passed review in two calls, retaining all eight lifetime reservations |

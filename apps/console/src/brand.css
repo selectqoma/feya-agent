@@ -1,0 +1,34 @@
+/* Pixel details frame the workspace; body text stays easy to read. */
+.brand{margin:0 12px;display:flex;flex-direction:column;align-items:flex-start;gap:15px}
+.brand-wordmark{display:block;width:156px;height:54px;image-rendering:pixelated}
+.brand-caption{font:8px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:1.1px;color:#bdd0bc}
+.sidebar{background:#193b31;background-image:linear-gradient(90deg,#ffffff03 1px,transparent 1px);background-size:8px 8px}
+.workspace-switch{margin-top:28px;border-radius:2px;background:#193b31}
+.nav-item{border-radius:2px}
+.nav-item.active{box-shadow:inset 3px 0 #f9a36c,3px 3px 0 #102e26}
+.eyebrow,.nav-label,.overline,.local-pill,.page-footer{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.eyebrow{display:flex;align-items:center;gap:10px;color:#596f55}
+.eyebrow:before{content:"";width:6px;height:6px;background:#ef975f;box-shadow:8px 0 #f4c19c,0 8px #f4c19c}
+.page-heading{padding-top:4px;position:relative}
+.page-heading:after{content:"";width:56px;height:32px;background-image:radial-gradient(#a9b99b 1px,transparent 1px);background-size:8px 8px;margin-left:auto;flex-shrink:0;opacity:.65}
+.primary,.secondary{border-radius:2px;box-shadow:2px 2px 0 #c8d1be}
+.primary{background:#f9a36c;border-color:#ec9256;color:#233e31;box-shadow:3px 3px 0 #294c3b}
+.primary:hover{background:#ffb682}
+.primary:active,.secondary:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #294c3b}
+.primary:disabled,.secondary:disabled{transform:none}
+.badge,.count,.pack-chip,.workspace-icon{border-radius:2px}
+.local-pill{white-space:nowrap}
+.local-pill i{border-radius:0;box-shadow:3px 3px 0 #d9e4d0}
+.conversation-workspace,.queue,.panel,.metrics{border-radius:3px;box-shadow:4px 4px 0 #e4e9dc}
+.conversation-toolbar{background:#f0f3e8;border-bottom-color:#dce3d1}
+.conversation-welcome>img{width:156px;height:54px;margin:2px 0 22px;image-rendering:pixelated}
+.conversation-welcome .overline{display:block;font-size:9px;letter-spacing:1.5px}
+.conversation-starters button{border-radius:2px;border-left:3px solid #cad5bc;background:#fbfcf7}
+.conversation-starters button:hover{border-left-color:#ee9a64;box-shadow:2px 2px 0 #e1e8d7}
+.conversation-task,.conversation-task-detail,.conversation-source-form{border-radius:2px}
+.conversation-task.selected{box-shadow:inset 3px 0 #ed9b65}
+.conversation-composer{border-radius:3px;box-shadow:3px 3px 0 #e6ebde}
+.conversation-message.role-user .message-content{border-radius:2px;border-left:2px solid #cbd8bb}
+@media(max-width:1150px){.brand-wordmark{width:130px;height:45px}.brand-caption{font-size:7px;letter-spacing:.7px}}
+@media(max-width:850px){.brand{margin:0 0 28px;align-items:center;gap:0}.brand-wordmark{width:48px;height:auto}.brand-caption{display:none}}
+@media(max-width:550px){.topbar{gap:10px}.topbar-right{gap:0}.topbar-right .avatar{display:none}.breadcrumb{gap:6px;font-size:10px}.local-pill{font-size:8px;letter-spacing:.3px}.page-heading:after{display:none}.conversation-welcome>img{width:130px;height:45px}.conversation-workspace{box-shadow:2px 2px 0 #e4e9dc}}

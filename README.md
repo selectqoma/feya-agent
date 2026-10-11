@@ -1,6 +1,6 @@
 # Feya Agent
 
-<img src="apps/console/src/feya.svg" width="35" height="45" alt="Feya pixel F"/>
+<img src="apps/console/src/feya-wordmark.svg" width="208" height="72" alt="Feya pixel wordmark"/>
 
 [![Checks](https://github.com/selectqoma/feya-agent/actions/workflows/check.yml/badge.svg)](https://github.com/selectqoma/feya-agent/actions/workflows/check.yml)
 
@@ -42,7 +42,7 @@ If Docker Desktop's credential helper stalls while pulling public images, unlock
 
 ## Operate from the terminal
 
-Run `uv run feya` in an interactive terminal to open the pixel-F command shell. Existing one-shot commands remain available; `uv run feya --help` lists them. Tab completes slash commands, `NO_COLOR=1` disables color, and the interface has no animations or saved command history.
+Run `uv run feya` in an interactive terminal to open the pixel-wordmark command shell. Existing one-shot commands remain available; `uv run feya --help` lists them. Tab completes slash commands, `NO_COLOR=1` disables color, and the interface has no animations or saved command history.
 
 ```text
 /setup                 Configure your company (alias: /onboard)

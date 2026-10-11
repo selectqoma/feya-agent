@@ -345,3 +345,24 @@ def test_resume_cli_preserves_empty_instruction_for_saved_draft(monkeypatch):
     monkeypatch.setattr(terminal, "converse", lambda *args: calls.append(args))
     cli.main()
     assert calls[0][:3] == ("resume", "task_saved", "")
+
+
+@pytest.mark.parametrize("columns", [40, 80])
+def test_pixel_wordmark_fits_terminal_and_honors_ascii_no_color(monkeypatch, columns):
+    import io
+
+    class TerminalOutput(io.StringIO):
+        encoding = "ascii"
+
+        def isatty(self):
+            return True
+
+    output = TerminalOutput()
+    monkeypatch.setattr(terminal.sys, "stdout", output)
+    monkeypatch.setattr(terminal.shutil, "get_terminal_size", lambda: os.terminal_size((columns, 24)))
+    monkeypatch.setenv("NO_COLOR", "1")
+    terminal.banner()
+    rendered = output.getvalue()
+    assert "#" in rendered and "FEYA / BUSINESS OPERATIONS" in rendered
+    assert "\x1b" not in rendered and rendered.isascii()
+    assert max(map(len, rendered.splitlines())) <= columns

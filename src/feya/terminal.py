@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -19,7 +20,17 @@ from feya.conversation_models import ConversationMessage, SourceCreate
 from feya.domain import Decision, Identifier
 from feya.packs import load_company
 
-PIXELS = ("11111", "11000", "11000", "11110", "11000", "11000", "11000")
+PIXELS = (
+    "00110000000000000000000000",
+    "01000000000000000000000000",
+    "11110000111000100010001110",
+    "01000001000100100010000001",
+    "01000001111100100010001111",
+    "01000001000000011110010001",
+    "01000000111100000010001111",
+    "00000000000000100010000000",
+    "00000000000000011100000000",
+)
 HELP = """/setup, /onboard        Configure the local company and rates (stop app first)
 /up [--skip-infra]      Start the workspace
 /down                  Stop app processes; preserve data
@@ -66,21 +77,19 @@ COMMANDS = {
 
 def banner():
     unicode = "utf" in (sys.stdout.encoding or "").lower()
-    pixel = "██" if unicode else "##"
-    lines = ["".join(pixel if bit == "1" else "  " for bit in row) for row in PIXELS]
+    scale = 2 if shutil.get_terminal_size().columns >= 56 else 1
+    pixel = ("█" if unicode else "#") * scale
     color = sys.stdout.isatty() and "NO_COLOR" not in os.environ and os.getenv("TERM") != "dumb"
-    labels = [
-        "FEYA",
-        "Business operations",
-        "",
-        "Local simulation",
-        "",
-        "/setup to begin",
-        "/help for commands",
-    ]
-    for line, label in zip(lines, labels, strict=True):
-        mark = f"\033[38;5;114m{line}\033[0m" if color else line
-        print(f"  {mark}   {label}")
+    print()
+    for row in PIXELS:
+        line = "".join(pixel if bit == "1" else " " * scale for bit in row).rstrip()
+        mark = f"\033[38;5;216m{line}\033[0m" if color else line
+        print(f"  {mark}")
+    print("  FEYA / BUSINESS OPERATIONS")
+    print("  Local simulation")
+    print()
+    print("  /setup  Configure your company")
+    print("  /help   Explore commands")
     print()
 
 
