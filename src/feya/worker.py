@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from contextlib import suppress
 
 import httpx
 from sqlalchemy import select, update
@@ -13,6 +14,7 @@ from feya.config import settings
 from feya.db import make_engine, scope
 from feya.domain import AgentResult
 from feya.packs import load_packs
+from feya.reasoning_errors import ReasoningFailure, classify_failure
 from feya.service import Service
 from feya.work import WorkService
 from feya.workflows import CaseWorkflow, ConversationWorkflow
@@ -83,16 +85,35 @@ class Activities:
     @activity.defn(name="process_work_event")
     async def process_work(self, event_id: str):
         async def run(task):
-            async with httpx.AsyncClient(timeout=100) as client:
-                response = await client.post(
-                    settings.agent_url + "/conversation/run",
-                    headers={"Authorization": "Bearer " + settings.agent_token},
-                    json=task.model_dump(),
-                )
-                response.raise_for_status()
-                return response.json()
+            headers = {"Authorization": "Bearer " + settings.agent_token}
 
-        return await self.work.process_event(event_id, run)
+            async def cancel():
+                with suppress(Exception):
+                    async with httpx.AsyncClient(timeout=2, headers=headers) as client:
+                        await client.post(settings.agent_url + "/conversation/cancel/" + task.run_id)
+
+            try:
+                async with httpx.AsyncClient(timeout=100, headers=headers) as client:
+                    response = await client.post(
+                        settings.agent_url + "/conversation/run", json=task.model_dump(),
+                    )
+                    if not response.is_success:
+                        try:
+                            detail = response.json().get("detail", {})
+                            code = detail.get("code") if isinstance(detail, dict) else None
+                        except (ValueError, AttributeError):
+                            code = None
+                        if isinstance(code, str):
+                            raise ReasoningFailure(code)
+                        response.raise_for_status()
+                    return response.json()
+            except asyncio.CancelledError:
+                await asyncio.shield(cancel())
+                raise
+            except Exception as exc:
+                raise classify_failure(exc) from exc
+
+        return await self.work.process_event(event_id, run, heartbeat=activity.heartbeat)
 
 
 async def dispatch(service: Service, client: Client, *, once=False):

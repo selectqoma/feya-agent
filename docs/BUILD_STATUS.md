@@ -1,12 +1,14 @@
 # Build status — 11 October 2026
 
-The enquiry-to-quote demo and first conversation/delegated-task slice are implemented. Source is published at [selectqoma/feya-agent](https://github.com/selectqoma/feya-agent) as an experimental prototype. The application runs locally at http://127.0.0.1:8010; credentials and runtime data are excluded from Git. No implementation or company data was imported from the older deployment.
+The enquiry-to-quote demo, conversation/delegated-task slice and first reliability increment are implemented. Source is published at [selectqoma/feya-agent](https://github.com/selectqoma/feya-agent) as an experimental prototype. The application runs locally at http://127.0.0.1:8010; credentials and runtime data are excluded from Git. No implementation or company data was imported from the older deployment.
 
 ## What works
 
 - Saved browser and CLI conversations, ordinary questions, standalone task delegation, supplied text sources and read-only case inspection. Tasks run independently of chat and need no workflow pack.
-- Task progress, missing-input waits, steering, terminal cancellation, paused/failed resumption, Markdown artifacts and results returned to the originating conversation.
-- Separate transactional work outbox, ordered chat events, tenant-composite references, duplicate-message IDs, persisted model-call reservations, leases and generation fences against stale results. Four requests per generation; source snapshots and bounded context. Successful calls record returned token counts; interrupted or failed calls may have unknown usage.
+- Task progress, missing-input waits, steering, active cancellation, paused/failed resumption, Markdown artifacts and results returned to the originating conversation.
+- Concrete acceptance criteria, persisted candidate drafts, a separate model review, and deterministic source excerpt/citation/arithmetic checks before a task becomes **Draft prepared**. Rejected candidates remain available with failed checks. Older results remain labelled unreviewed.
+- Typed, redacted failures; budget-bounded persisted retry backoff for transient failures; visible recovery instructions and lifetime work reservations across resumption.
+- Separate transactional work outbox, ordered chat events, tenant-composite references, duplicate-message IDs, persisted model-call reservations, leases and generation fences against stale results. Four requests per generation, with lifetime task limits of 12 calls, 420,000 reserved tokens and 1,080 reserved active seconds; source snapshots and bounded context. Successful calls record returned token counts; interrupted or failed calls may have unknown usage.
 
 - Pixel-F terminal (`feya`) with `/setup` and `/onboard`, private company pack configuration, service controls, case inspection, exact approval/rejection and reconciliation through the existing API. The browser shares the pixel F and company name.
 
@@ -23,17 +25,22 @@ The enquiry-to-quote demo and first conversation/delegated-task slice are implem
 
 | Check | Observed result |
 |---|---|
-| Backend suite against PostgreSQL | 64 passed |
-| Conversation browser/API journey | Supplied source → delegated task → saved Markdown download; desktop/mobile, no JS errors |
+| Backend suite against PostgreSQL | 180 passed |
+| Conversation browser/API journey | Live payment task: acceptance criteria, passed review, lifetime budget and Markdown download from real API; desktop/mobile, no JS errors or horizontal overflow |
 | Conversation browser regression fixtures | Concurrent chat, source, progress, steering, waiting/failed resumption, terminal cancellation, download; passed |
-| Task restart / replay | SIGKILL worker while task waited for input, add source and resume while stopped, restart and redeliver; one task and one completed result |
-| Task concurrency and budgets | Duplicate messages, stale versions, inflight steering, cancellation, scoped reads, unknown citations, finite crash reservations and oversized context covered |
-| Fresh database migration | Both migrations applied in an isolated temporary PostgreSQL schema; passed |
+| Task restart / replay | SIGKILL worker while task waited for input, add source and resume while stopped, restart, review and redeliver; one checked artifact and prior lifetime reservations retained |
+| Task concurrency and budgets | Duplicate messages, stale versions, inflight steering/cancellation, authenticated cancel before/after request arrival, queue deadline, scoped reads, retry backoff, lifetime resume limits, saved-review recovery and context covered |
+| Fresh and upgrade migrations | All three migrations applied in an isolated schema; upgrade from seeded revision 0002 preserved artifacts and backfilled prior usage; passed |
 | Terminal company journey | `/onboard` → `/up` → `/demo` → `/reply` → `/approve` → verified EUR 1,815 draft; passed with a synthetic company |
 | Company setup validation | Cancellation/EOF preserves files; private file mode; invalid financial inputs reprompt; running services and stale settings rejected |
 | Shared pixel F and company name | Browser rendering inspected at desktop and 390px mobile; no page errors |
+| Offline evaluation calibration | 24/24 scenario reference/counterexample checks; not a model-quality score |
+| Live model evaluation | 23/24 observable checks with Codex, one request per scenario; missing contract dates still triggered an unnecessary case lookup instead of asking for input |
+| Live persisted completion review | Payment summary → saved candidate → independent review → checked Markdown artifact; two task calls |
+| Live cancellation | Cancelled a running delegated task through the API; private reasoning cancellation endpoint acknowledged; no artifact published and call reservation retained |
+| SDK retry boundaries | Mock transports verified one HTTP attempt on timeout, connection failure, 429 and 503 for OpenAI, Codex and Anthropic |
 | Ruff | Passed |
-| mypy | Passed for 19 source files |
+| mypy | Passed for 21 source files |
 | TypeScript + Vite production build | Passed |
 | npm dependency install audit | 0 reported vulnerabilities at install |
 | Browser end-to-end journey | Enquiry → reply → approve → lost response → reconciliation → verified completion; passed |
@@ -55,7 +62,9 @@ Conversation screenshots: `.local/conversation-live-desktop.png` and `.local/con
 
 The original development machine used a local `.env` selecting `FEYA_RUNNER=pydantic-ai` and `FEYA_MODEL=openai-codex:gpt-5.6-luna`, using its account-owner Codex sign-in. Model calls consumed that subscription's allowance. Set `FEYA_RUNNER=fixture` and restart for offline use. The repository default remains the offline runner; `.env` and account credentials are not tracked.
 
-Live task testing exposed unnecessary repeated case lookups; mode-specific execution instructions and a repeated-list guard corrected this. A previously failed task resumed to a completed report in one request. Source IDs are validated; semantic correctness of generated analysis still requires operator review.
+Live testing exposed unnecessary repeated case lookups, null optional response fields, and review false rejections. The application rejects repeated tools and preserves candidates when review fails. Independent review accepted a valid supplier report and rejected an unsupported VAT assertion; this is evidence that the checks execute, not proof of semantic accuracy. The reviewer uses a separate call to the same configured model and can share its mistakes. Claims not extracted by the reviewer can escape arithmetic/evidence checks.
+
+The final full live evaluation used prompt/schema hash `031cf7d8aa7e9274`, model `openai-codex:gpt-5.6-luna`, and 24 reserved requests. Initial testing scored 16/24 before fixing two checker false positives and response/routing issues. The final 23/24 result remains a failure of the full live suite; the missing-dates case is an unresolved routing weakness, not waived. A targeted recheck had passed it, which shows model variability. A supplier comparison also required corrections and remained blocked by strict evidence-excerpt review checks. Reports stay under ignored `.local/evals/`; re-run with `--live --limit 24 --requests-per-case 1 --request-budget 24`. No competitor comparison or production-readiness inference follows from this small set.
 
 The live preparation case is **Customer journey discovery workshop** (`jordan@example.test`). It is synthetic and left awaiting operator review. Existing synthetic cases also demonstrate waiting and verified-completed states.
 
@@ -76,7 +85,7 @@ The live preparation case is **Customer journey discovery workshop** (`jordan@ex
 
 ## Next implementation order
 
-The [product development map](research/03_PRODUCT_DEVELOPMENT_MAP.md) expands this sequence. The first conversation/task slice is complete; broader company knowledge, richer onboarding, corrections and real connectors remain pending.
+The [product development map](research/03_PRODUCT_DEVELOPMENT_MAP.md) expands this sequence. The first conversation/task and reliability slices are complete; broader company knowledge, richer onboarding, corrections and real connectors remain pending. The 24-scenario offline harness calibrates validators and counterexamples, while explicit live runs measure limited observable model behavior. Neither substitutes for a production evaluation set or the competitor benchmark.
 
 1. Complete a fair same-fixture Hermes/n8n comparison and record measured setup/reliability tradeoffs before claiming a platform advantage.
 2. Harden deployment boundaries: OIDC and real roles, separate least-privilege DB users, agent/gateway network isolation, active member revocation, secret storage, durable failed-work recovery UI, immutable versioned migrations, full container packaging.

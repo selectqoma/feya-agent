@@ -53,6 +53,7 @@ class ConversationWorkflow:
                 "process_work_event",
                 event_id,
                 start_to_close_timeout=timedelta(minutes=7),
+                heartbeat_timeout=timedelta(seconds=10),
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=2), maximum_interval=timedelta(seconds=30),
                 ),

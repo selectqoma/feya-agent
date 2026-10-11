@@ -40,7 +40,7 @@ HELP = """/setup, /onboard        Configure the local company and rates (stop ap
 /task TASK_ID          Inspect progress and saved result
 /steer TASK_ID TEXT     Change a task objective
 /cancel TASK_ID         Cancel a task
-/resume TASK_ID TEXT    Resume with additional instructions
+/resume TASK_ID [TEXT]  Resume; optional instructions revise the task
 Type naturally         Talk to Feya and delegate work
 /help                  Show commands
 /exit                  Leave the terminal; services keep running"""

@@ -8,10 +8,15 @@ type Thread = {id: string; title: string};
 type Message = {id: string; role: string; content: string; task_id?: string; created_at: string};
 type Source = {id: string; title: string; content: string};
 type Progress = {id: string; kind: string; content: string; created_at: string};
-type Task = {id: string; objective: string; deliverable: string; status: string; version: number; progress?: Progress[]; result_markdown?: string};
+type CompletionChecks = {passed: boolean; label: string; checks: {name: string; passed: boolean; detail: string}[]};
+type Task = {id: string; objective: string; deliverable: string; status: string; version: number; progress?: Progress[]; result_markdown?: string;
+  acceptance_criteria?: string[]; candidate_markdown?: string; completion_checks?: Partial<CompletionChecks>; completion_label?: string;
+  error_code?: string; failure_message?: string; calls_reserved?: number; tokens_reserved?: number; seconds_reserved?: number;
+  unknown_usage_calls?: number; limits?: {calls: number; tokens: number; active_seconds: number; generation_calls: number}; next_attempt_at?: string; can_resume?: boolean};
 type ThreadDetail = Thread & {messages: Message[]; sources: Source[]; tasks: Task[]; pending: number};
 type TaskDetail = Task & {sources?: Source[]};
 const label = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
+const taskLabel = (task: Task) => task.completion_label === 'draft_prepared' && task.status === 'completed' ? 'Draft prepared' : label(task.status);
 const activeTask = (task: Task) => ['queued', 'running', 'waiting_for_input'].includes(task.status);
 
 export default function Conversation({api, runner}: {api: Api; runner?: string}) {
@@ -110,7 +115,7 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
     await perform(async () => {
       const updated = await api<TaskDetail>('/tasks/' + task.id + '/' + action, {
         expected_version: task.version,
-        instruction: instruction.trim() || (action === 'cancel' ? 'Cancelled by the operator.' : 'Continue this task.'),
+        instruction: instruction.trim() || (action === 'cancel' ? 'Cancelled by the operator.' : ''),
       });
       setTaskDetail(updated); setInstruction('');
     });
@@ -153,12 +158,20 @@ export default function Conversation({api, runner}: {api: Api; runner?: string})
       <aside className="conversation-context" aria-label="Conversation tasks and sources">
         <div className="section-title"><h2><ListChecks size={17}/>Delegated work</h2><span className="count">{detail?.tasks.length || 0}</span></div>
         {!detail?.tasks.length && <p className="context-empty">Give Feya a task in the conversation. Progress and results will appear here.</p>}
-        {detail?.tasks.map(t => <button key={t.id} className={'conversation-task ' + (t.id === taskId ? 'selected' : '')} onClick={() => {setTaskId(t.id); setTaskDetail(undefined); setInstruction('');}}><span className={'badge task-' + t.status}>{['running', 'queued'].includes(t.status) ? <LoaderCircle size={11} className="spin"/> : <i/>}{label(t.status)}</span><b>{t.objective}</b>{t.progress?.length ? <small>{t.progress.at(-1)?.content}</small> : null}</button>)}
+        {detail?.tasks.map(t => <button key={t.id} className={'conversation-task ' + (t.id === taskId ? 'selected' : '')} onClick={() => {setTaskId(t.id); setTaskDetail(undefined); setInstruction('');}}><span className={'badge task-' + t.status}>{['running', 'queued'].includes(t.status) ? <LoaderCircle size={11} className="spin"/> : <i/>}{taskLabel(t)}</span><b>{t.objective}</b>{t.progress?.length ? <small>{t.progress.at(-1)?.content}</small> : null}</button>)}
         {task && <section className="conversation-task-detail" aria-label="Selected task"><div className="section-title"><h3>Task details</h3><button aria-label="Close task details" onClick={() => {setTaskId(''); setTaskDetail(undefined);}}><X size={16}/></button></div><p>{task.deliverable}</p>{task.progress?.length ? <ul className="task-progress">{task.progress.map(step => <li key={step.id}><b>{label(step.kind)}</b><span>{step.content}</span></li>)}</ul> : null}
+
+          {!!task.acceptance_criteria?.length && <details open><summary>Acceptance criteria</summary><ol>{task.acceptance_criteria.map((criterion, i) => <li key={i}>{criterion}</li>)}</ol></details>}
+          {task.failure_message && <div className="task-failure" role="status"><b>{label(task.error_code || 'Task needs attention')}</b><p>{task.failure_message}</p>{task.next_attempt_at && <small>Next retry: {new Date(task.next_attempt_at).toLocaleTimeString()}</small>}</div>}
+          {task.limits && <details className="task-budget"><summary>Work budget · {task.calls_reserved ?? 0}/{task.limits.calls} requests</summary><p>Across all attempts, reviews and resumptions.</p><dl><dt>Reserved tokens</dt><dd>{(task.tokens_reserved ?? 0).toLocaleString()} / {task.limits.tokens.toLocaleString()}</dd><dt>Reserved execution time</dt><dd>{task.seconds_reserved ?? 0} / {task.limits.active_seconds} seconds</dd></dl><p>Reservations include interrupted calls. {task.unknown_usage_calls ?? 0} calls have unconfirmed usage. Subscription allowance is not available here.</p></details>}
+          {!!task.completion_checks?.checks?.length && <details className="task-checks" open={task.completion_checks.passed === false}><summary>{task.completion_checks.passed ? 'Draft checks passed' : 'Draft needs revision'}</summary><ul>{task.completion_checks.checks.map((check, i) => <li key={i}><b>{check.passed ? 'Passed' : 'Needs attention'} · {label(check.name)}</b><span>{check.detail}</span></li>)}</ul><p>Includes a separate model review and code checks. These do not certify factual accuracy or an external outcome.</p></details>}
+          {task.completion_label === 'legacy_unreviewed' && <p>This result predates completion checks and has not been reviewed by the new checker.</p>}
+          {task.status !== 'completed' && task.candidate_markdown && <details><summary>Read unapproved draft</summary><div className="message-content">{task.candidate_markdown}</div></details>}
+          {task.status === 'completed' && task.completion_label === 'draft_prepared' && <p>Draft prepared and checked. Review it before use; no external action was performed.</p>}
 
           {task.status === 'completed' && <><a className="text-button" href={'/v1/tasks/' + task.id + '/artifact'} download><ArrowDownToLine size={14}/>Download result</a>{task.result_markdown && <details><summary>Read result</summary><div className="message-content">{task.result_markdown}</div></details>}</>}
           {task.status === 'cancelled' && <p>This task was cancelled. Start a new task in the conversation to continue the work.</p>}
-          {!['completed', 'cancelled'].includes(task.status) && <><label htmlFor="task-instruction">{task.status === 'waiting_for_input' ? 'Provide the missing information' : 'Additional instructions'}<textarea id="task-instruction" rows={3} value={instruction} maxLength={4000} onChange={e => setInstruction(e.target.value)} placeholder="Adjust the brief or add context…"/></label><div className="task-controls">{activeTask(task) && <button className="secondary" disabled={busy || !instruction.trim()} onClick={() => void taskAction('steer')}>Update task</button>}{['failed', 'waiting_for_input'].includes(task.status) && <button className="secondary" disabled={busy} onClick={() => void taskAction('resume')}>Resume</button>}{activeTask(task) && <button className="text-button danger" disabled={busy} onClick={() => void taskAction('cancel')}>Cancel task</button>}</div></>}
+          {!['completed', 'cancelled'].includes(task.status) && <><label htmlFor="task-instruction">{task.status === 'waiting_for_input' ? 'Provide the missing information' : 'Additional instructions'}<textarea id="task-instruction" rows={3} value={instruction} maxLength={4000} onChange={e => setInstruction(e.target.value)} placeholder="Adjust the brief or add context…"/></label><div className="task-controls">{activeTask(task) && <button className="secondary" disabled={busy || !instruction.trim()} onClick={() => void taskAction('steer')}>Update task</button>}{['failed', 'waiting_for_input'].includes(task.status) && <button className="secondary" disabled={busy || task.can_resume === false} onClick={() => void taskAction('resume')}>Resume</button>}{activeTask(task) && <button className="text-button danger" disabled={busy} onClick={() => void taskAction('cancel')}>Cancel task</button>}</div></>}
         </section>}
         <div className="section-title source-heading"><h2><FileText size={17}/>Source material</h2><span className="count">{detail?.sources.length || 0}</span></div>
         {!detail?.sources.length && <p className="context-empty">Add the notes and documents Feya should use for this conversation.</p>}

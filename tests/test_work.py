@@ -24,8 +24,18 @@ def result(action="answer", text="Prepared the requested summary.", **kwargs):
     return ConversationAgentResult(model="test:work", step=ConversationStep(action=action, text=text, **kwargs))
 
 
-async def answer(_):
-    return result()
+def reviewed(request, *, passed=True):
+    return result(review={
+        "criteria": [{"criterion_index": i, "passed": passed, "reason": "Test reviewer assessment"}
+                     for i, _ in enumerate(request.acceptance_criteria)],
+        "evidence": [{"source_id": source.id, "quote": source.content[:80],
+                      "claim": request.candidate[:80]} for source in request.sources
+                     if f"[{source.id}]" in request.candidate],
+    })
+
+
+async def answer(request):
+    return reviewed(request) if request.mode == "review" else result()
 
 
 def event_for(work, task_id):
@@ -41,7 +51,7 @@ async def delegate(work, conversation_id=None):
 
     async def plan(_):
         return result("delegate", "I will prepare the comparison.", objective="Compare supplied suppliers",
-                      deliverable="A Markdown comparison")
+                      deliverable="A Markdown comparison", acceptance_criteria=["Prepare the requested comparison"])
 
     await work.process_event(message["event_id"], plan)
     task = work.detail(conversation_id)["tasks"][-1]
@@ -106,7 +116,7 @@ async def test_delegation_background_result_and_artifact(work):
     completed = work.task_detail(task["id"])
     assert completed["status"] == "completed"
     assert work.artifact(task["id"])["content"] == "Prepared the requested summary."
-    assert [p["kind"] for p in completed["progress"]] == ["queued", "running", "completed"]
+    assert [p["kind"] for p in completed["progress"]] == ["queued", "running", "candidate_saved", "reviewing", "completed"]
     assert len([m for m in work.detail(task["conversation_id"])["messages"] if m["task_id"]]) == 2
 
 
@@ -189,6 +199,8 @@ async def test_read_only_tools_and_sources_are_scoped(work, service):
 
     async def read(task):
         calls.append(task)
+        if task.mode == "review":
+            return reviewed(task)
         if not task.observations:
             return result("tool", "Inspecting the enquiry", tool="read_case", case_id=case_id)
         assert task.sources
@@ -196,9 +208,9 @@ async def test_read_only_tools_and_sources_are_scoped(work, service):
 
     await work.process_event(event_id, read)
     completed = work.task_detail(task["id"])
-    assert len(calls) == 2 and completed["status"] == "completed"
+    assert len(calls) == 3 and completed["status"] == "completed"
     assert completed["sources"][0]["id"] in completed["result_markdown"]
-    assert len(completed["usage"]) == 2
+    assert len(completed["usage"]) == 3
     assert service.detail(case_id)["actions"] == []
     other_service = Service(service.engine, service.packs, uid("other"))
     foreign_case = other_service.ingest(enquiry())["case_id"]
@@ -218,7 +230,7 @@ async def test_tool_loop_and_invented_citations_never_complete(work):
         return result("tool", "Inspecting", tool="list_cases")
 
     await work.process_event(event_id, loop)
-    assert count == MAX_CALLS
+    assert count == 2
     assert work.task_detail(task["id"])["status"] == "failed"
     task, event_id = await delegate(work)
 
@@ -270,4 +282,269 @@ async def test_oversized_tool_context_pauses_with_actionable_message(work):
     await work.process_event(event_id, answer)
     task = work.task_detail(task["id"])
     assert task["status"] == "waiting_for_input"
+    assert task["error_code"] == "context_limit"
     assert "shorter source excerpts" in task["progress"][-1]["content"]
+
+
+@pytest.mark.parametrize("code,retryable,status", [
+    ("auth_expired", False, "waiting_for_input"),
+    ("rate_limited", True, "queued"),
+    ("timeout", True, "queued"),
+    ("unavailable", True, "queued"),
+    ("invalid_output", False, "failed"),
+])
+async def test_typed_failures_backoff_and_no_busy_retries(work, code, retryable, status):
+    from feya.reasoning_errors import ReasoningFailure
+
+    task, event_id = await delegate(work)
+    calls = 0
+
+    async def failing(_):
+        nonlocal calls
+        calls += 1
+        raise ReasoningFailure(code)
+
+    response = await work.process_event(event_id, failing)
+    failed = work.task_detail(task["id"])
+    assert response == ("pending" if retryable else None)
+    assert failed["error_code"] == code and failed["status"] == status
+    assert failed["calls_reserved"] == 1 and failed["unknown_usage_calls"] == 1
+    await work.process_event(event_id, failing)
+    assert calls == 1
+    if retryable:
+        assert failed["next_attempt_at"]
+        with work.engine.begin() as db:
+            db.execute(update(t.events).where(scope(t.events, work.tenant, event_id)).values(
+                next_attempt_at=now() - timedelta(seconds=1),
+            ))
+        await work.process_event(event_id, answer)
+        completed = work.task_detail(task["id"])
+        assert completed["status"] == "completed" and completed["calls_reserved"] == 3
+
+
+async def test_lifetime_budget_cannot_reset_with_resume_or_steer(work):
+    from feya.work import LIFETIME_CALLS
+
+    task, event_id = await delegate(work)
+
+    async def wait(_):
+        return result("need_input", "Please clarify the request.")
+
+    for attempt in range(LIFETIME_CALLS):
+        await work.process_event(event_id, wait)
+        current = work.task_detail(task["id"])
+        assert current["calls_reserved"] == attempt + 1
+        assert current["seconds_reserved"] == 90 * (attempt + 1)
+        if attempt + 1 < LIFETIME_CALLS:
+            work.task_command(task["id"], "resume", current["version"], "Clarification supplied")
+            event_id = event_for(work, task["id"])
+    assert not current["can_resume"]
+    with pytest.raises(Conflict, match="lifetime budget"):
+        work.task_command(task["id"], "resume", current["version"])
+    with pytest.raises(Conflict, match="lifetime budget"):
+        work.task_command(task["id"], "steer", current["version"], "Try again")
+    assert work.task_command(task["id"], "cancel", current["version"])["status"] == "cancelled"
+
+
+async def test_cancel_actively_stops_inflight_model_within_one_second(work):
+    task, event_id = await delegate(work)
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+
+    async def slow(_):
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    running = asyncio.create_task(work.process_event(event_id, slow))
+    await entered.wait()
+    current = work.task_detail(task["id"])
+    work.task_command(task["id"], "cancel", current["version"])
+    await asyncio.wait_for(cancelled.wait(), 1)
+    await asyncio.wait_for(running, 1)
+    final = work.task_detail(task["id"])
+    assert final["status"] == "cancelled" and final["calls_reserved"] == 1
+    assert final["unknown_usage_calls"] == 1
+    assert final["candidate_markdown"] == ""
+
+
+async def test_saved_candidate_recovery_does_not_regenerate_or_duplicate_artifact(work):
+    task, event_id = await delegate(work)
+    event = work._claim(event_id)
+    assert work._apply(event, result(text="The durable draft")) is True
+    assert work.task_detail(task["id"])["candidate_markdown"] == "The durable draft"
+    review = work._claim(event_id)
+    assert review["request"].mode == "review"
+    # A worker died during review; its reserved request remains charged and usage unknown.
+    with work.engine.begin() as db:
+        db.execute(update(t.events).where(scope(t.events, work.tenant, event_id)).values(
+            lease_until=now() - timedelta(seconds=1),
+        ))
+    modes = []
+
+    async def verify(request):
+        modes.append(request.mode)
+        assert request.candidate == "The durable draft"
+        return reviewed(request)
+
+    await work.process_event(event_id, verify)
+    await work.process_event(event_id, verify)
+    final = work.task_detail(task["id"])
+    assert modes == ["review"]
+    assert final["status"] == "completed" and final["calls_reserved"] == 3
+    assert final["completion_label"] == "draft_prepared"
+    assert work.artifact(task["id"])["content"] == "The durable draft"
+
+
+async def test_failed_review_preserves_candidate_and_requires_correction(work):
+    task, event_id = await delegate(work)
+
+    async def draft_then_fail_review(request):
+        return reviewed(request, passed=False) if request.mode == "review" else result(text="Weak draft")
+
+    await work.process_event(event_id, draft_then_fail_review)
+    current = work.task_detail(task["id"])
+    assert current["status"] == "waiting_for_input"
+    assert current["completion_label"] == "needs_revision"
+    assert current["candidate_markdown"] == "Weak draft" and current["result_markdown"] == ""
+    assert not current["completion_checks"]["passed"]
+    with pytest.raises(Conflict):
+        work.artifact(task["id"])
+    work.task_command(task["id"], "resume", current["version"], "Include the missing comparison")
+    await work.process_event(event_for(work, task["id"]), answer)
+    final = work.task_detail(task["id"])
+    assert final["status"] == "completed" and final["calls_reserved"] == 4
+
+
+async def test_candidate_survives_generation_budget_and_resume_only_reviews(work):
+    task, event_id = await delegate(work)
+    calls = 0
+
+    async def slow_draft(request):
+        nonlocal calls
+        calls += 1
+        if calls < MAX_CALLS:
+            return result("tool", "Reading cases", tool="read_case", case_id=f"missing_case_{calls}")
+        return result(text="Saved at the last available call")
+
+    await work.process_event(event_id, slow_draft)
+    current = work.task_detail(task["id"])
+    assert current["error_code"] == "budget_exhausted"
+    assert current["candidate_markdown"] and current["result_markdown"] == ""
+    work.task_command(task["id"], "resume", current["version"])
+    modes = []
+
+    async def review_only(request):
+        modes.append(request.mode)
+        return reviewed(request)
+
+    await work.process_event(event_for(work, task["id"]), review_only)
+    final = work.task_detail(task["id"])
+    assert modes == ["review"] and final["calls_reserved"] == MAX_CALLS + 1
+    assert final["status"] == "completed"
+
+
+async def test_reserved_usage_known_receipts_and_duplicate_worker_fencing(work):
+    task, event_id = await delegate(work)
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def measured(request):
+        entered.set()
+        await release.wait()
+        return (reviewed(request) if request.mode == "review" else result()).model_copy(
+            update={"input_tokens": 100, "output_tokens": 50},
+        )
+
+    running = asyncio.create_task(work.process_event(event_id, measured))
+    await entered.wait()
+    assert await work.process_event(event_id, measured) == "pending"
+    release.set()
+    await running
+    final = work.task_detail(task["id"])
+    assert final["calls_reserved"] == 2 and final["unknown_usage_calls"] == 0
+    assert final["tokens_reserved"] < 2 * 35000
+    assert all(receipt["state"] == "known" for receipt in final["usage"])
+    assert final["tokens_reserved"] == sum(u["reserved_tokens"] for u in final["usage"])
+
+
+@pytest.mark.parametrize("field,value", [("tokens_reserved", 419999), ("seconds_reserved", 1000)])
+async def test_resume_and_steer_enforce_all_lifetime_budgets(work, field, value):
+    task, event_id = await delegate(work)
+
+    async def ask(_):
+        return result("need_input", "Please clarify.")
+
+    await work.process_event(event_id, ask)
+    with work.engine.begin() as db:
+        db.execute(update(t.tasks).where(scope(t.tasks, work.tenant, task["id"])).values(**{field: value}))
+    current = work.task_detail(task["id"])
+    assert not current["can_resume"]
+    for command in ("resume", "steer"):
+        with pytest.raises(Conflict, match="lifetime budget"):
+            work.task_command(task["id"], command, current["version"], "Try again")
+    assert work.task_detail(task["id"])["generation"] == current["generation"]
+
+
+async def test_worker_stops_repeated_missing_case_lookup(work):
+    task, event_id = await delegate(work)
+    tool_calls = []
+    original = work._tool
+
+    def capture(step):
+        tool_calls.append(step.case_id)
+        return original(step)
+
+    work._tool = capture
+
+    async def repeat(_):
+        return result("tool", "Reading", tool="read_case", case_id="nonexistent_case")
+
+    await work.process_event(event_id, repeat)
+    assert tool_calls == ["nonexistent_case"]
+    final = work.task_detail(task["id"])
+    assert final["error_code"] == "invalid_output"
+    assert final["observations"][0]["case_id"] == "nonexistent_case"
+
+
+async def test_worker_http_classifies_error_and_forwards_cancel(work, service, monkeypatch):
+    import httpx
+
+    from feya import worker
+
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+    mode = "error"
+    requests = []
+
+    async def handle(request):
+        requests.append(request.url.path)
+        if request.url.path.startswith("/conversation/cancel/"):
+            cancelled.set()
+            return httpx.Response(200, json={"cancelled": True})
+        if mode == "error":
+            return httpx.Response(503, json={"detail": {
+                "code": "auth_expired", "message": "SECRET do not display", "retryable": True,
+            }})
+        entered.set()
+        await asyncio.Event().wait()
+
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(worker.httpx, "AsyncClient", lambda **kwargs: original_client(
+        transport=httpx.MockTransport(handle), **kwargs,
+    ))
+    monkeypatch.setattr(worker.activity, "heartbeat", lambda: None)
+    activities = worker.Activities(service)
+    task, event_id = await delegate(work)
+    await activities.process_work(event_id)
+    current = work.task_detail(task["id"])
+    assert current["error_code"] == "auth_expired"
+    assert "SECRET" not in current["failure_message"]
+    mode = "slow"
+    work.task_command(task["id"], "resume", current["version"])
+    running = asyncio.create_task(activities.process_work(event_for(work, task["id"])))
+    await asyncio.wait_for(entered.wait(), 2)
+    current = work.task_detail(task["id"])
+    work.task_command(task["id"], "cancel", current["version"])
+    await asyncio.wait_for(cancelled.wait(), 2)
+    await asyncio.wait_for(running, 2)
+    assert sum(path.startswith("/conversation/cancel/") for path in requests) == 1

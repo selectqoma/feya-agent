@@ -64,7 +64,7 @@ The shell also supports `/reject CASE_ID`, `/recheck ACTION_ID`, `/status`, and 
 
 ## Talk to Feya and delegate work
 
-The browser opens in **Conversation**. Add source material, then ask, “Compare these supplier proposals and recommend one.” Feya can answer directly or create an independent background task with an objective and deliverable. Keep chatting while it runs. Task details show progress, missing input and saved results; use **Update task**, **Cancel task**, or **Resume** for paused or failed work. Completed results download as Markdown. Cancellation is terminal; delegate a new task to start again.
+The browser opens in **Conversation**. Add source material, then ask, “Compare these supplier proposals and recommend one.” Feya can answer directly or create an independent background task with an objective and deliverable. Keep chatting while it runs. Delegation records concrete acceptance criteria. A candidate report is saved, then reviewed in a separate model call and checked by code before it becomes **Draft prepared**. Task details show the criteria, checks, remaining work budget, missing input and saved results; use **Update task**, **Cancel task**, or **Resume** for paused or failed work. Completed results download as Markdown. Cancellation is terminal; delegate a new task to start again.
 
 The same work is available from the terminal:
 
@@ -76,6 +76,7 @@ Compare the supplied proposals and prepare a recommendation with sources.
 /work
 /task TASK_ID
 /steer TASK_ID "Prioritize delivery time over price."
+/resume TASK_ID                    # retry a saved draft review after a temporary failure
 /resume TASK_ID "Use the source I just added."
 /cancel TASK_ID
 /conversations
@@ -84,7 +85,9 @@ Compare the supplied proposals and prepare a recommendation with sources.
 
 One-shot chat: `uv run feya ask "What can you help with?"`. `/source` reads only the text file you explicitly name. The selected conversation and pending message ID are stored under ignored `.local`; PostgreSQL stores the conversation itself. Closing a browser or terminal does not cancel work. Restarting the worker resumes committed assignments.
 
-This version has two read-only case tools and operator-supplied text sources. It cannot browse the web, inspect arbitrary files, send messages or execute provider actions from chat. Sources and history are context, never authority. Source IDs are checked, but generated analysis and recommendations still need your review. Business actions still require the existing case/gateway path. Each task generation has at most four reasoning requests; an interrupted request still consumes a reservation. A conversation accepts at most eight text sources totalling 14,000 UTF-8 bytes including metadata; individual sources are capped at 12,000 characters. Context limits are explicit, and work that cannot fit asks for shorter input. There is no automatic billing fallback.
+This version has two read-only case tools and operator-supplied text sources. It cannot browse the web, inspect arbitrary files, send messages or execute provider actions from chat. Sources and history are context, never authority. Source IDs, quoted excerpts and reported arithmetic are checked. A separate model review checks the acceptance criteria and unsupported claims. This can still miss errors or reject valid analysis; generated drafts need your review and never imply an external action was performed. Failed checks preserve the candidate for correction. Business actions still require the existing case/gateway path. Each task generation has at most four reasoning requests. Across steering and resumption, a task retains a lifetime limit of 12 calls, 420,000 reserved tokens and 1,080 reserved active seconds; review uses the same budget. Interrupted requests retain their reservation and may show unknown usage. The supported API adapters disable SDK HTTP retries so the durable worker owns backoff. These remain application-level work limits, not an account spending cap: provider authentication refresh and Claude CLI internals are outside that guarantee. A conversation accepts at most eight text sources totalling 14,000 UTF-8 bytes including metadata; individual sources are capped at 12,000 characters. Context limits are explicit, and work that cannot fit asks for shorter input. There is no automatic billing fallback.
+
+Rate limits, timeouts and temporary outages retry with persisted backoff while budget remains. Authentication, malformed output and context failures pause or fail with a specific recovery message. Cancellation actively interrupts the local model request; already incurred provider usage may still count. `/resume TASK_ID` without new instructions can retry a preserved review; new instructions revise the task.
 
 The offline fixture demonstrates delegation and recovery but returns labelled source excerpts rather than authored analysis. Select a live model below for substantive conversations and deliverables. This is the first conversation/delegation slice of the [product development map](docs/research/03_PRODUCT_DEVELOPMENT_MAP.md), not the entire roadmap.
 
@@ -157,6 +160,7 @@ Start the infrastructure and apply migrations first (`feya up` does both).
 uv run ruff check src tests scripts
 uv run mypy src/feya
 uv run pytest -q
+uv run python scripts/evaluate_conversation.py
 npm --prefix apps/console run build
 uv run playwright install chromium
 uv run python scripts/browser_check.py
@@ -167,7 +171,9 @@ uv run python scripts/work_recovery_check.py
 
 The case browser and recovery scripts create **synthetic demo cases** in the local workspace. The conversation browser check uses route fixtures. The work recovery check requires `FEYA_RUNNER=fixture` and creates a synthetic conversation, stops only this checkout’s worker, resumes a task while it is stopped, and verifies replay after restart. The recovery script deliberately kills only this checkout's worker, approves while it is stopped, restarts it, and re-delivers outbox events. Core tests use unique test tenants and never delete the demo's data. `FEYA_TEST_DATABASE_URL` can select a separate test PostgreSQL database after applying the migration there.
 
-Coverage includes concurrent duplicate ingestion/commits, exact approval binding, expiry, stale evidence, tenant references, prompt-injection proposals, wrong recipients/rates, manual handling, read-back differences, lost responses and second-pack portability. See [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md) for observed results and limits.
+The offline evaluation calibrates 24 scenario contracts and counterexamples; it is **not a model-quality score**. To test the configured model explicitly, run `uv run python scripts/evaluate_conversation.py --live --scenario supplier_arithmetic --scenario injected_send --scenario unavailable_web`. This consumes account allowance or API budget, stays within an explicit request cap, and writes model/prompt hashes, latency, usage and failures to ignored `.local/evals/`. It does not execute real tools or certify factual accuracy.
+
+Coverage includes completion checks, persistent retry/cancellation and lifetime budgets, plus concurrent duplicate ingestion/commits, exact approval binding, expiry, stale evidence, tenant references, prompt-injection proposals, wrong recipients/rates, manual handling, read-back differences, lost responses and second-pack portability. See [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md) for observed results and limits.
 
 ## Layout
 

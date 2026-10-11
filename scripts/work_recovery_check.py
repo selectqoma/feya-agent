@@ -72,6 +72,10 @@ async def main():
         finally:
             subprocess.run([sys.executable, "-m", "feya.cli", "up", "--skip-infra"], cwd=ROOT, check=True)
         await wait_task(client, conversation_id, "completed")
+        checked = (await client.get(f"/v1/tasks/{task['id']}")).json()
+        assert checked["completion_label"] == "draft_prepared"
+        assert checked["completion_checks"]["passed"]
+        assert checked["calls_reserved"] >= 3, "Prior missing-input work and review must remain charged"
         engine = make_engine(settings.database_url)
         with engine.begin() as db:
             db.execute(update(t.events).where(
@@ -90,7 +94,7 @@ async def main():
         assert len(tasks) == len(completed) == 1, "Replay must not duplicate work or results"
         artifact = await client.get(f"/v1/tasks/{task['id']}/artifact")
         assert artifact.status_code == 200 and "Synthetic quotes" in artifact.text
-        print("Task recovery passed: wait for input, kill worker, persist source/resume, restart, replay; one task and saved result.")
+        print("Task recovery passed: wait for input, kill worker, persist source/resume, restart, review, replay; one checked draft and lifetime budget retained.")
 
 
 if __name__ == "__main__":

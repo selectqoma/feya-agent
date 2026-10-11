@@ -10,6 +10,7 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
 from feya import agents, conversation_agent
+from feya.completion import validate_completion
 from feya.conversation_agent import (
     ConversationClaudeRunner,
     ConversationFixtureRunner,
@@ -43,6 +44,15 @@ async def test_structured_answer_cites_supplied_sources_and_records_usage():
     assert result.output_tokens > 0
 
 
+async def test_unused_null_criteria_from_provider_normalizes_without_repair_call():
+    result = await make_runner(action="answer", text="Revenue is income before costs.",
+                               acceptance_criteria=None).run(
+        ConversationAgentInput(mode="chat", instruction="Explain revenue", max_steps=1)
+    )
+    assert result.step.acceptance_criteria == []
+    assert result.step.action == "answer"
+
+
 async def test_unknown_citations_and_recursive_delegation_are_rejected():
     task = ConversationAgentInput(mode="task", instruction="Prepare report")
     with pytest.raises(ValueError, match="unavailable source"):
@@ -55,7 +65,7 @@ async def test_unknown_citations_and_recursive_delegation_are_rejected():
 
 async def test_context_budget_rejects_before_model_execution():
     task = ConversationAgentInput(mode="chat", instruction="Hello", max_input_tokens=1)
-    with pytest.raises(ValueError, match="context budget"):
+    with pytest.raises(ValueError, match="context limit"):
         await make_runner(action="answer", text="Hi").run(task)
 
 
@@ -84,6 +94,42 @@ async def test_already_supplied_case_list_cannot_be_requested_again():
     )
     with pytest.raises(ValueError, match="repeated lookup"):
         await make_runner(action="tool", tool="list_cases", text="Read cases again").run(task)
+
+
+async def test_repeated_case_read_is_blocked_even_when_case_was_not_found():
+    task = ConversationAgentInput(mode="task", instruction="Read case_missing",
+        observations=[ToolObservation(tool="read_case", case_id="case_missing", content="Case not found.")])
+    with pytest.raises(ValueError, match="repeated lookup"):
+        await make_runner(action="tool", tool="read_case", case_id="case_missing", text="Retry").run(task)
+
+
+async def test_review_has_no_tools_and_cannot_be_supplied_by_task_writer():
+    task = ConversationAgentInput(mode="review", instruction="Review the draft",
+                                  candidate="A draft", acceptance_criteria=["Write a draft"])
+    with pytest.raises(ValueError, match="completion review"):
+        await make_runner(action="tool", tool="list_cases", text="Read cases").run(task)
+    with pytest.raises(ValueError, match="independent review"):
+        await make_runner(action="answer", text="A draft", review={}).run(
+            ConversationAgentInput(mode="task", instruction="Write a draft")
+        )
+
+
+async def test_fixture_review_only_passes_explicit_simulation_criterion():
+    runner = ConversationFixtureRunner()
+    sources = [WorkSource(id="src_terms", title="Terms", content="Payment within 30 days.")]
+    candidate = await runner.run(ConversationAgentInput(mode="task", instruction="Prepare report", sources=sources))
+    criteria = [conversation_agent.FIXTURE_CRITERION]
+    result = await runner.run(ConversationAgentInput(mode="review", instruction="Review", sources=sources,
+                                                    candidate=candidate.step.text, acceptance_criteria=criteria))
+    assert validate_completion(candidate.step.text, criteria, sources, result.step.review)["passed"]
+    result = await runner.run(ConversationAgentInput(mode="review", instruction="Review", sources=sources,
+                                                    candidate=candidate.step.text, acceptance_criteria=["Recommend the best supplier"]))
+    assert not result.step.review.criteria[0].passed
+
+
+def test_run_identifier_never_reaches_model_prompt():
+    task = ConversationAgentInput(mode="chat", instruction="Hello", run_id="private_runtime_id")
+    assert "private_runtime_id" not in conversation_agent.prompt_for(task)
 
 
 async def test_fixture_is_labelled_and_supports_delegation_missing_input_and_case_reads():
@@ -194,3 +240,30 @@ async def test_claude_cli_is_killed_when_request_is_cancelled(monkeypatch):
             ConversationAgentInput(mode="chat", instruction="Hello")
         )
     assert process.killed and process.waited
+
+
+@pytest.mark.parametrize(("returncode", "payload", "expected"), [
+    (1, {"error": "not logged in: sensitive details"}, "auth_expired"),
+    (0, {"is_error": True, "error": "rate limit: sensitive details"}, "rate_limited"),
+    (0, {"unexpected": "sensitive details"}, "invalid_output"),
+])
+async def test_claude_failures_have_safe_categories(monkeypatch, returncode, payload, expected):
+    from feya.reasoning_errors import ReasoningFailure
+
+    monkeypatch.setattr(conversation_agent.shutil, "which", lambda _: "/test/claude")
+
+    class Process:
+        async def communicate(self, _):
+            return json.dumps(payload).encode(), b""
+
+    process = Process()
+    process.returncode = returncode
+
+    async def subprocess(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(conversation_agent.asyncio, "create_subprocess_exec", subprocess)
+    with pytest.raises(ReasoningFailure) as failure:
+        await ConversationClaudeRunner().run(ConversationAgentInput(mode="chat", instruction="Hello"))
+    assert failure.value.code == expected
+    assert "sensitive details" not in str(failure.value)

@@ -26,6 +26,10 @@ async def main():
         "version": 1,
         "progress": [{"id": "progress_browser", "kind": "working", "content": "Reviewing supplier proposals.", "created_at": "2026-10-11T12:00:02Z"}],
         "result_markdown": "",
+        "acceptance_criteria": ["Compare prices and delivery dates", "Make a recommendation"],
+        "calls_reserved": 2, "tokens_reserved": 16000, "seconds_reserved": 180,
+        "unknown_usage_calls": 1,
+        "limits": {"calls": 12, "tokens": 420000, "active_seconds": 1080, "generation_calls": 4},
     }
     requests = []
 
@@ -94,6 +98,10 @@ async def main():
         await page.get_by_label("Message Feya").fill("Compare these suppliers and recommend one.")
         await page.get_by_role("button", name="Send", exact=True).click()
         await page.get_by_role("button", name="View task").click()
+        await page.get_by_text("Acceptance criteria", exact=True).wait_for(timeout=10000)
+        await page.get_by_text("Compare prices and delivery dates", exact=True).wait_for()
+        await page.get_by_text("Work budget · 2/12 requests", exact=True).click()
+        await page.get_by_text("1 calls have unconfirmed usage.", exact=False).wait_for()
         await page.get_by_label("Additional instructions").fill("Prioritize delivery date.")
         await page.get_by_role("button", name="Update task", exact=True).click()
         assert requests[-1][1]["instruction"] == "Prioritize delivery date."
@@ -105,10 +113,23 @@ async def main():
             await page.get_by_role("button", name="Resume", exact=True).wait_for(timeout=10000)
             await page.get_by_role("button", name="Resume", exact=True).click()
             assert task["status"] == "running"
+        task.update(status="failed", can_resume=False, error_code="budget_exhausted",
+                    failure_message="The work budget is exhausted.")
+        await page.get_by_text("The work budget is exhausted.", exact=True).wait_for(timeout=10000)
+        assert await page.get_by_role("button", name="Resume", exact=True).is_disabled()
         await page.screenshot(path=".local/conversation-desktop.png", full_page=True)
         task["status"] = "completed"
+        task.update(failure_message="", completion_label="draft_prepared", completion_checks={
+            "passed": True, "label": "draft_prepared", "checks": [
+                {"name": "criteria_coverage", "passed": True, "detail": "All criteria assessed."},
+                {"name": "citation_evidence", "passed": True, "detail": "Literal source quotes checked."},
+            ],
+        })
         task["result_markdown"] = "Choose Supplier A: lower price and earlier delivery."
         await page.get_by_role("link", name="Download result").wait_for(timeout=10000)
+        await page.get_by_text("Draft prepared", exact=True).wait_for()
+        await page.get_by_text("Draft checks passed", exact=True).click()
+        await page.get_by_text("Literal source quotes checked.", exact=True).wait_for()
         await page.get_by_text("Read result", exact=True).click()
         await page.get_by_text(task["result_markdown"], exact=True).wait_for()
         await page.set_viewport_size({"width": 390, "height": 844})

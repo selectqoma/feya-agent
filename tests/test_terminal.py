@@ -334,3 +334,14 @@ def test_source_reads_only_explicit_bounded_text_and_task_commands_use_version(t
         assert calls[-1] == ("POST", f"/v1/tasks/task_1/{command}", {
             "expected_version": 3, "instruction": text,
         })
+
+
+def test_resume_cli_preserves_empty_instruction_for_saved_draft(monkeypatch):
+    from feya import cli
+
+    calls = []
+    monkeypatch.setattr(cli.sys, "argv", ["feya", "resume", "task_saved"])
+    monkeypatch.setattr(cli, "load_environment", lambda: None)
+    monkeypatch.setattr(terminal, "converse", lambda *args: calls.append(args))
+    cli.main()
+    assert calls[0][:3] == ("resume", "task_saved", "")

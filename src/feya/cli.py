@@ -231,7 +231,7 @@ def main():
     for command in ("steer", "resume"):
         task_command = sub.add_parser(command)
         task_command.add_argument("identifier")
-        task_command.add_argument("text", nargs="+")
+        task_command.add_argument("text", nargs="+" if command == "steer" else "*")
     for command in ("case", "reply", "approve", "reject", "recheck"):
         sub.add_parser(command).add_argument("identifier")
     pack = sub.add_parser("pack")
