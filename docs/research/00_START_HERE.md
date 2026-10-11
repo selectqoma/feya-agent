@@ -5,7 +5,7 @@
 
 ## Decision in one sentence
 
-Build an **open-source, case-centric business operations platform** where agents prepare actions and an independent gateway enforces policy, human approval and provider verification. Do not build another generic chat assistant, do not fork Hermes, and do not begin with a workflow canvas.
+Build an **open-source business agent suite** that carries out routine work autonomously, tracks tasks and cases, and asks humans to approve critical actions such as sending emails or invoices. An independent gateway enforces permissions and approved actions and verifies provider results.
 
 ## Files
 
@@ -16,7 +16,7 @@ Build an **open-source, case-centric business operations platform** where agents
 
 Today's [Feya repository](https://github.com/selectqoma/feya) includes a live company-specific Claude Code deployment, a Hermes scaffold, Telegram and console reliability work, and a CRM pilot. It is **not already** the proposed platform. The public repo currently has no root license visible in source review; public source does not by itself grant OSI open-source rights. Tracked company-specific/deployment material and repository history need review before public OSS packaging.
 
-Also, **Hermes now has durable Kanban with human review, retries and multi-profile agents**. The claim “Feya has workflows/approval, Hermes does not” is false. The sharper hypothesis is business-case model + evidence + provider-bound policy enforcement + verified outcomes + operator-centric UX.
+Also, **Hermes now has durable Kanban with human review, retries and multi-profile agents**. The claim “Feya has workflows/approval, Hermes does not” is false. Feya’s product focus is autonomous business work with persistent tasks and cases, evidence, approval for critical actions and verified outcomes.
 
 ## The first ten tickets
 

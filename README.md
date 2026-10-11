@@ -8,7 +8,9 @@ A local business assistant you can talk to, delegate work to, and use to manage 
 
 **Experimental business operations workspace with a bounded agent engine.** The current prototype demonstrates enquiry-to-quote workflows using simulated email and accounting providers. It is not a full CRM or a production deployment.
 
-The agent extracts source-grounded facts; deterministic application code calculates prices and controls approvals; the execution gateway verifies provider results. Business packs configure required facts and rates. Two packs demonstrate reuse of this workflow; unrelated workflows still require implementation.
+Feya’s product direction is agent-led operations: the agent plans, decides how to approach a task, uses available tools, produces the work and revises it as needed. Routine work proceeds autonomously. Humans approve critical actions, including sending emails or invoices, making payments and irreversible changes. Application checks enforce permissions, exact amounts and approved actions; they support the agent’s work.
+
+Today, conversational agents handle analysis, reports and drafts with read-only case tools. The enquiry-to-quote demo still uses a fixed workflow, exact price calculations and approval before creating a simulated offer. External email and invoice sending are not implemented. Business packs configure required facts and rates; adding other operational workflows and tools remains development work.
 
 Read the [architecture](docs/ARCHITECTURE.md), [implementation status and roadmap](docs/BUILD_STATUS.md), or original [research and specification](docs/research/00_START_HERE.md). The specification describes the intended product, including features not yet built.
 

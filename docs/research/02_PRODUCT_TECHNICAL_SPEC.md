@@ -2,7 +2,7 @@
 
 **Status:** Proposed build specification, v0.1 design baseline. **Not an account of currently shipped code.**  
 **Date:** 2026-10-11  
-**Product:** Feya, an open-source business-case execution platform with bounded AI agents  
+**Product:** Feya, an open-source business agent suite with human approval for critical actions\
 **Companion:** `01_COMPETITIVE_LANDSCAPE.md`  
 **Decision:** Build a framework-independent business kernel using Python, Temporal, PydanticAI, PostgreSQL and a narrow action gateway; do not fork Hermes.
 
@@ -19,7 +19,7 @@
 
 ### 1.1 Mission
 
-Feya helps small and midsize service businesses convert incoming work into reliable, explainable outcomes across existing software. Rather than a general chat assistant that sometimes performs actions, Feya owns a persistent **business case**: who asked for what, what we know, which facts are missing, what work is proposed, what is permitted, and what actually happened at each connected provider.
+Feya handles business work for small and midsize companies across their existing software. Users delegate through conversation or recurring workflows. The agent plans, chooses tools, executes routine operations, checks outcomes and revises its work. Persistent tasks and **business cases** retain who asked for what, the evidence, missing facts, actions and observed results. Humans approve critical actions such as sending emails or invoices, making payments and irreversible changes.
 
 **One-line pitch:** *An AI-powered operations teammate, with business rules you can trust and work you can verify.*
 
@@ -29,11 +29,11 @@ Businesses receive unstructured requests through inboxes and channels, then manu
 
 ### 1.3 Product principles
 
-1. **Cases, not chats, are the primary abstraction.** Chat is a context tool inside a case, not the system of record.
-2. **Authority is not reasoning.** An LLM may propose actions; trusted application code alone authorizes external effects.
+1. **Delegate through conversation; retain durable work.** Standalone tasks and business cases hold progress, evidence and results.
+2. **The agent owns task decisions.** The agent plans and executes routine work using available tools. Application code enforces permissions and exact-action approvals for critical effects.
 3. **Evidence before commitment.** Important facts are linked to source records with identities, retrieval timestamps and integrity metadata.
 4. **Verify reality after execution.** A provider HTTP success is not proof of correct business outcome; compare live persisted objects, or mark reconciliation required.
-5. **Least autonomy by default.** Reads and drafts can be autonomous under policy; customer-facing dispatch, money-moving and irreversible actions default to human-controlled.
+5. **Autonomy for routine work; human approval for critical actions.** The agent proceeds without step-by-step confirmation. Sending emails or invoices, moving money and irreversible changes require approval of the exact action.
 6. **One engine, multiple workflows.** Same core supports a fixed specialist pipeline and a bounded generalist agent path.
 7. **Company specificity is configuration.** Business packs define data requirements and policies; no industry names in core models.
 8. **Replaceable components.** No proprietary dependency on one model, agent runtime, scheduling service or accounting vendor.

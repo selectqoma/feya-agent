@@ -7,11 +7,11 @@
 
 ## 0. Executive decision
 
-**Build Feya as a business-case execution platform, not as a general assistant or a low-code canvas.** The organizing object is a *case* (a real customer enquiry, request, incident or transaction) with verified evidence, a workflow, business policy, proposed actions, human decisions, provider-side outcomes, and an audit trail. AI is an interchangeable reasoning component inside this system. Every external mutation passes through an independent execution gateway.
+**Build Feya as a business agent suite that owns routine work from request to result.** The agent plans, chooses tools, executes available operations, checks results and revises its work. Persistent tasks and cases retain the evidence, business context, actions and outcomes. Humans approve critical actions, including sending emails or invoices; the execution gateway enforces that approval and verifies the resulting operation.
 
-The positioning hypothesis is **“the open-source operational case layer for AI-powered businesses”**. More plainly: *Connect the tools your company already uses, turn requests into tracked work, let AI prepare the work, and keep humans and policy in control of consequential actions.*
+The positioning is **“an open-source AI operations teammate for your business”**. More plainly: *Connect your tools, delegate the work, and approve the critical actions.*
 
-This is a **hypothesis to validate**, not an established competitive advantage. Hermes already has durable multi-agent Kanban, role delegation, reviews, skills, cron, channels, and profiles. n8n has AI workflows and human review. CrewAI and LangGraph provide stateful workflows. Feya cannot win by saying “we have agents,” “we have approvals,” or “we use Temporal.”
+Competitive advantage still requires measurement. Hermes already has durable multi-agent Kanban, role delegation, reviews, skills, cron, channels, and profiles. n8n has AI workflows and human review. CrewAI and LangGraph provide stateful workflows. Feya cannot win by saying “we have agents,” “we have approvals,” or “we use Temporal.”
 
 The proposed distinctive combination is: **business objects + source-grounded evidence + independent action authorization + real-provider reconciliation + case-centric operator UI + reusable business packs**, available in the core self-hosted product. No individual ingredient is unique.
 
@@ -173,7 +173,7 @@ A fourth approach worth evaluating is **n8n orchestrations with a Feya case/poli
 
 ## 6. What could constitute a genuine advantage?
 
-**Claim A: Business-case UX.** Unlike generic chats or task cards, every case shows its customer/business entity, stage, relevant provider records, missing facts, money/date impact, next action, owner, and evidence. Hypothesis: an office operator can manage work without inspecting prompts or JSON.
+**Claim A: Business-case UX.** Unlike generic chats or task cards, every case shows its customer/business entity, stage, relevant provider records, missing facts, money/date impact, next action, owner, and evidence. Design goal: an office operator can manage work without inspecting prompts or JSON.
 
 **Claim B: Evidence-grounded operations.** Every consequential decision refers to immutable, scoped source observations (e.g. Gmail message ID, Billit order version, Calendar event version). A model-generated claim without supporting evidence cannot satisfy a hard policy prerequisite.
 
@@ -236,7 +236,7 @@ All prompts/fixtures must be synthetic or explicitly licensed and deidentified. 
 | End-to-end completion | Cases completed correctly with controlled intervention | Aim for ≥20% relative gain vs best practical baseline, or revise positioning |
 | Cost per verified case | LLM + hosted execution + operator review time | Report distribution; do not optimize cost by dropping gates |
 
-The 20% superiority figure is a **proposed go/no-go hypothesis**, not an observed result. Report confidence intervals and failures; don't cherry-pick easy scenarios. If competitors match or beat Feya at the same risk and cost, narrow the vertical or switch to an extension strategy.
+The 20% superiority figure is a **proposed go/no-go target**, not an observed result. Report confidence intervals and failures; don't cherry-pick easy scenarios. If competitors match or beat Feya at the same risk and cost, narrow the vertical or switch to an extension strategy.
 
 ### 8.4 Benchmark setup fairness
 

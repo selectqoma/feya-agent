@@ -2,6 +2,12 @@
 
 Feya supports conversations and independent delegated tasks alongside business cases. A case records the incoming request, its evidence, missing facts, proposed actions, approvals and observed outcomes. The current implementation handles one enquiry-to-quote workflow with two business packs.
 
+## Intended operating model
+
+The agent owns routine work: interpreting requests, planning, choosing available tools, preparing artifacts, checking results and revising its work. It asks for essential missing information and human approval for critical actions such as sending emails or invoices, making payments and irreversible changes. Code enforces access, action approval and execution integrity. Business judgment and task decisions belong to the agent.
+
+The current conversation agent can read cases and produce artifacts. The fixed enquiry-to-quote workflow below is the first implementation; general operational tools and customer-facing sends are not yet available.
+
 ## A case from start to finish
 
 1. The API records an incoming message, its case and an outbox event in PostgreSQL. Duplicate source events are deduplicated.
@@ -11,7 +17,7 @@ Feya supports conversations and independent delegated tasks alongside business c
 5. The separate execution gateway checks authorization, journals an attempt, and calls a simulated provider. Independent read-back must match the intended result before the case is marked verified.
 6. If a response is lost after a write, the case waits for verification. Reconciliation looks for the existing object instead of blindly repeating the write. Unresolved outcomes remain visible to the operator.
 
-PostgreSQL owns business state. Temporal owns workflow execution and durable waits. The model proposes facts; it does not calculate authoritative prices, grant approvals or call business-provider tools.
+PostgreSQL owns business state. Temporal owns workflow execution and durable waits. In the current case workflow, the model extracts facts and the application calculates exact prices. Business-provider tools are not yet exposed to the agent, and human approval cannot be supplied by model output.
 
 ## Conversation and delegated tasks
 
