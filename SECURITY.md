@@ -2,7 +2,7 @@
 
 This checkout is a local synthetic prototype. It must bind to loopback. It is not ready for public deployment, real customer data or production provider credentials.
 
-The model can return structured extraction only; it has no shell, MCP, filesystem or provider tools in the PydanticAI runner. The optional Claude CLI runner disables built-in tools and MCP and receives an allowlisted environment. The worker validates citations and required fields; the gateway separately validates exact recipients, prices, source revision, pack digest and approval. Send, dispatch, delete and payment operations are not implemented.
+The model returns structured extraction or conversation steps; it has no shell, MCP, filesystem or provider tools in the PydanticAI runner. The trusted conversation worker accepts only read-only case-list and case-detail tool requests within its tenant. Imported source instructions cannot grant tool permissions. Conversation output is displayed as text, and artifacts download as Markdown; model HTML is not executed. The optional Claude CLI runner disables built-in tools and MCP and receives an allowlisted environment. The worker validates citations and required fields; the gateway separately validates exact recipients, prices, source revision, pack digest and approval. Send, dispatch, delete and payment operations are not implemented.
 
 Local human identity is a fixed development operator. Requests require an exact loopback Host, same-origin browser context and custom write header. This prevents basic cross-site browser requests; it does not authenticate malicious software running on the same machine. Production OIDC, role membership/revocation, authorization-grade DB grants, network egress policies and independent security review are pending.
 
@@ -10,7 +10,7 @@ Audit rows reject UPDATE/DELETE through a PostgreSQL trigger. The development da
 
 Company setup writes `.local/company.yaml` with owner-only permissions and atomic replacement. It requires app processes to be stopped before changing rules; restart all services to load the same pack. This file contains configuration, not credentials, and is excluded from Git. The terminal escapes control characters in displayed source data and uses the same exact-action approval endpoint as the browser.
 
-Model credentials stay outside source control. `.env` is local and mode 0600. No provider error bodies, credentials or message content are written to the run audit. Source messages are still stored in the local PostgreSQL database; encryption, retention/export/deletion beyond case JSON export are not production-ready.
+Model credentials stay outside source control. `.env` is local and mode 0600. No provider error bodies, credentials or message content are written to the run audit. Conversation messages, pasted sources, task results and case evidence are stored in the local PostgreSQL database; encryption, retention/export/deletion beyond case JSON export are not production-ready.
 
 ## Report a vulnerability
 

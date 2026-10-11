@@ -1,18 +1,25 @@
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from temporalio.client import Client
 
 from feya import db as tables
 from feya.config import Settings, settings
+from feya.conversation_models import (
+    ConversationCreate,
+    ConversationMessage,
+    SourceCreate,
+    TaskCommand,
+)
 from feya.db import make_engine, scope
 from feya.domain import CaseCommand, Decision, Fault, Inbound, Proposal, uid
 from feya.gateway import FakeProvider
 from feya.packs import load_company, load_packs
 from feya.service import Conflict, Denied, NotFound, Service
+from feya.work import WorkService
 
 
 def create_app(config: Settings = settings, service: Service | None = None):
@@ -29,6 +36,8 @@ def create_app(config: Settings = settings, service: Service | None = None):
     )
     company = load_company(config.company_file)
     app.state.service = s
+    work = WorkService(s.engine, s.tenant, s)
+    app.state.work = work
 
     @app.middleware("http")
     async def local_boundary(request: Request, call_next):
@@ -102,6 +111,49 @@ def create_app(config: Settings = settings, service: Service | None = None):
             "dispatch": "disabled",
             "packs": [p.model_dump() | {"fingerprint": p.fingerprint} for p in s.packs.values()],
         }
+
+    @app.get("/v1/conversations")
+    def conversations():
+        return work.list_conversations()
+
+    @app.post("/v1/conversations", status_code=201)
+    def create_conversation(data: ConversationCreate):
+        return work.create_conversation(data.title)
+
+    @app.get("/v1/conversations/{conversation_id}")
+    def conversation(conversation_id: str):
+        return work.detail(conversation_id)
+
+    @app.post("/v1/conversations/{conversation_id}/messages", status_code=202)
+    def message(conversation_id: str, data: ConversationMessage):
+        return work.post_message(conversation_id, data.content, data.request_id)
+
+    @app.post("/v1/conversations/{conversation_id}/sources", status_code=201)
+    def source(conversation_id: str, data: SourceCreate):
+        return work.add_source(conversation_id, data.title, data.content)
+
+    @app.get("/v1/tasks")
+    def tasks():
+        return work.list_tasks()
+
+    @app.get("/v1/tasks/{task_id}")
+    def task(task_id: str):
+        return work.task_detail(task_id)
+
+    @app.post("/v1/tasks/{task_id}/{operation}", status_code=202)
+    def task_operation(task_id: str, operation: str, data: TaskCommand):
+        if operation not in {"steer", "cancel", "resume"}:
+            raise HTTPException(404, "Unknown task operation")
+        return work.task_command(task_id, operation, data.expected_version, data.instruction)
+
+    @app.get("/v1/tasks/{task_id}/artifact")
+    def task_artifact(task_id: str):
+        artifact = work.artifact(task_id)
+        return Response(
+            artifact["content"],
+            media_type="text/markdown",
+            headers={"Content-Disposition": f'attachment; filename="{artifact["filename"]}"'},
+        )
 
     @app.get("/v1/cases")
     def cases(phase: str | None = None, limit: int = Query(100, ge=1, le=200)):

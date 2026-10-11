@@ -30,6 +30,7 @@ async def main():
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             await page.goto(BASE)
+            await page.get_by_role("button", name="Today", exact=True).click()
             await page.get_by_role("heading", name="A little clarity for your day.").wait_for()
             await page.get_by_role(
                 "button", name="A clearer customer onboarding process sam@example.test"

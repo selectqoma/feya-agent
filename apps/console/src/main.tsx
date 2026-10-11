@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Activity, ArrowDownToLine, ArrowRight, Check, CheckCheck, ChevronRight, CircleHelp, Clock3, FileText, Inbox, Layers3, LayoutGrid, Link2, ListChecks, LoaderCircle, Plus, Search, Settings2, ShieldCheck, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowRight, Check, CheckCheck, ChevronRight, CircleHelp, Clock3, FileText, Inbox, Layers3, LayoutGrid, Link2, ListChecks, LoaderCircle, MessageSquare, Plus, Search, Settings2, ShieldCheck, Sparkles, TriangleAlert, X } from 'lucide-react';
 import './style.css';
 import feyaMark from './feya.svg';
+import Conversation from './Conversation';
 
 type Phase = string;
 type Fact = {key: string; value: string; evidence_id: string; quote: string};
@@ -26,7 +27,7 @@ function App() {
   const [cases,setCases] = useState<Case[]>([]);
   const [selected,setSelected] = useState<string | null>(null);
   const [detail,setDetail] = useState<Detail>();
-  const [view,setView] = useState('today');
+  const [view,setView] = useState('conversation');
   const [filter,setFilter] = useState('all');
   const [query,setQuery] = useState('');
   const [tab,setTab] = useState('overview');
@@ -69,7 +70,7 @@ function App() {
   const filtered=cases.filter(c => (view!=='approvals'||c.phase==='awaiting_review')&&(view!=='exceptions'||['blocked','reconciliation_required'].includes(c.phase))&&(filter==='all'||c.phase===filter)&&(c.subject+' '+c.customer_email).toLowerCase().includes(query.toLowerCase()));
   const pack=workspace?.packs.find(p=>p.id===detail?.pack_id);
   const action=detail?.actions.filter(a=>!['superseded','cancelled'].includes(a.status)).at(-1);
-  const title = {today:'A little clarity for your day.',cases:'Every case. One clear view.',approvals:'Ready for your decision.',exceptions:'Let’s resolve the uncertainty.',packs:'Built around your business.',connections:'Your tools, working together.',agents:'Reasoning with clear boundaries.'}[view];
+  const title = {conversation:'A conversation. A way forward.',today:'A little clarity for your day.',cases:'Every case. One clear view.',approvals:'Ready for your decision.',exceptions:'Let’s resolve the uncertainty.',packs:'Built around your business.',connections:'Your tools, working together.',agents:'Reasoning with clear boundaries.'}[view];
   function nav(id: string){setView(id);setFilter('all');setSelected(null);}
   async function decide(decision: string){if(!action)return; if(fault!=='none')await api('/demo/faults/'+action.id,{mode:fault});await api('/approvals/'+action.id+'/decide',{decision,expected_digest:action.digest,reason:reason || 'Reviewed the exact offer, customer, and source facts in the local workspace'});}
   return <div className="shell">
@@ -77,7 +78,7 @@ function App() {
       <a className="brand" href="/" aria-label="Feya home"><img className="brand-mark" src={feyaMark} alt=""/>feya<span className="brand-dot">.</span></a>
       <div className="workspace-switch"><span className="workspace-icon" aria-hidden="true">F</span><div><b>{workspace?.name || 'Feya'}</b><small>Local workspace</small></div><ChevronRight size={15}/></div>
       <span className="nav-label">WORKSPACE</span>
-      <nav>{[{id:'today',label:'Today',icon:LayoutGrid},{id:'cases',label:'All cases',icon:Inbox},{id:'approvals',label:'Approvals',icon:ShieldCheck,count:needsReview},{id:'exceptions',label:'Needs attention',icon:TriangleAlert,count:uncertain}].map(n=><button key={n.id} className={view===n.id?'nav-item active':'nav-item'} onClick={()=>nav(n.id)}><n.icon size={18}/>{n.label}{!!n.count&&<span className="nav-count">{n.count}</span>}</button>)}</nav>
+      <nav>{[{id:'conversation',label:'Conversation',icon:MessageSquare},{id:'today',label:'Today',icon:LayoutGrid},{id:'cases',label:'All cases',icon:Inbox},{id:'approvals',label:'Approvals',icon:ShieldCheck,count:needsReview},{id:'exceptions',label:'Needs attention',icon:TriangleAlert,count:uncertain}].map(n=><button key={n.id} className={view===n.id?'nav-item active':'nav-item'} onClick={()=>nav(n.id)}><n.icon size={18}/>{n.label}{!!n.count&&<span className="nav-count">{n.count}</span>}</button>)}</nav>
       <span className="nav-label second">YOUR OPERATIONS</span>
       <nav>{[{id:'packs',label:'Business packs',icon:Layers3},{id:'agents',label:'Agent suite',icon:Sparkles},{id:'connections',label:'Connections',icon:Link2}].map(n=><button key={n.id} className={view===n.id?'nav-item active':'nav-item'} onClick={()=>nav(n.id)}><n.icon size={18}/>{n.label}</button>)}</nav>
       <div className="sidebar-bottom"><div className="safe-note"><ShieldCheck size={20}/><b>Thoughtful by default.</b><p>Agents prepare. You decide.<br/>Every outcome is checked.</p></div><div className="user"><span className="avatar">Y</span><div><b>Your local workspace</b><small>Synthetic data only</small></div><Settings2 size={16}/></div></div>
@@ -87,7 +88,8 @@ function App() {
       {error&&<div className="alert error" role="alert"><TriangleAlert size={18}/>{error}<button aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}
       {notice&&<div className="alert success" role="status"><Check size={18}/>{notice}<button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
       <div className="page">
-        <div className="page-heading"><div><div className="eyebrow">{view==='today'?new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}):'FEYA WORKSPACE'}</div><h1>{title}</h1><p>Keep work moving, with the context and control you need.</p></div><button className="primary" onClick={()=>setNewCase(true)}><Plus size={17}/>New enquiry</button></div>
+        <div className="page-heading"><div><div className="eyebrow">{view==='today'?new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}):'FEYA WORKSPACE'}</div><h1>{title}</h1><p>{view==='conversation'?'Ask a question, delegate a task, or work through an idea.':'Keep work moving, with the context and control you need.'}</p></div>{view!=='conversation'&&<button className="primary" onClick={()=>setNewCase(true)}><Plus size={17}/>New enquiry</button>}</div>
+        {view==='conversation'&&<Conversation api={api} runner={workspace?.runner}/>}
         {['today','cases','approvals','exceptions'].includes(view)&&<>
           <section className="metrics" aria-label="Case overview">{[{label:'Needs your review',value:needsReview,icon:ShieldCheck,phase:'awaiting_review',note:'Prepared and ready for a decision'},{label:'Awaiting customer',value:waiting,icon:Clock3,phase:'waiting_for_information',note:'Missing details, clearly tracked'},{label:'Needs verification',value:uncertain,icon:Activity,phase:'reconciliation_required',note:'Uncertain outcomes stay visible'},{label:'Completed',value:completed,icon:CheckCheck,phase:'completed',note:'Verified drafts or manual handling'}].map(m=><button className={'metric '+(filter===m.phase?'selected':'')} key={m.label} onClick={()=>setFilter(filter===m.phase?'all':m.phase)}><span>{m.label}<m.icon size={18}/></span><strong>{m.value.toString().padStart(2,'0')}</strong><small>{m.note}</small></button>)}</section>
           <div className="section-title"><div><h2>{view==='approvals'?'Approval queue':view==='exceptions'?'Attention queue':'Your work queue'}</h2><span className="count">{filtered.length}</span></div><span className="subtle"><span className={'status-dot '+(workspace?.temporal==='connected'?'':'offline')}/>{workspace?.temporal==='connected'?'Workflow engine connected':'Checking workflow engine'}{workspace && workspace.backlog>0 ? ` · ${workspace.backlog} queued` : ''}</span></div>

@@ -4,7 +4,7 @@
 
 [![Checks](https://github.com/selectqoma/feya-agent/actions/workflows/check.yml/badge.svg)](https://github.com/selectqoma/feya-agent/actions/workflows/check.yml)
 
-A local business workspace that turns customer enquiries into evidence-linked cases, prepares replies and offers, and verifies provider outcomes before calling the work complete.
+A local business assistant you can talk to, delegate work to, and use to manage evidence-linked customer cases. Feya saves conversations, runs bounded background assignments, and returns reports and drafts to the same workspace.
 
 **Experimental business operations workspace with a bounded agent engine.** The current prototype demonstrates enquiry-to-quote workflows using simulated email and accounting providers. It is not a full CRM or a production deployment.
 
@@ -60,7 +60,33 @@ Use `/down` before `/setup` if the app is already running. Setup asks for a comp
 
 Re-running setup edits the same company pack; changed rules invalidate its pending proposals. Start all services again with `/up`. Built-in demo packs and existing cases remain available. This configures one existing local workspace, not separate production tenants. Template facts and service names currently come from the selected pack; model-account selection remains in `.env` as described below.
 
-The shell also supports `/reject CASE_ID`, `/recheck ACTION_ID`, `/status`, and `/help`. Every approval uses the same exact-action digest and server validation as the browser. An accepted decision is not a claim of successful execution; inspect the case for provider verification. This is a command interface, not natural-language chat.
+The shell also supports `/reject CASE_ID`, `/recheck ACTION_ID`, `/status`, and `/help`. Every approval uses the same exact-action digest and server validation as the browser. An accepted decision is not a claim of successful execution; inspect the case for provider verification. Type ordinary text to chat or delegate an assignment. The shell waits briefly for the reply, then returns control; `/messages` retrieves later replies and `/work` shows background tasks.
+
+## Talk to Feya and delegate work
+
+The browser opens in **Conversation**. Add source material, then ask, “Compare these supplier proposals and recommend one.” Feya can answer directly or create an independent background task with an objective and deliverable. Keep chatting while it runs. Task details show progress, missing input and saved results; use **Update task**, **Cancel task**, or **Resume** for paused or failed work. Completed results download as Markdown. Cancellation is terminal; delegate a new task to start again.
+
+The same work is available from the terminal:
+
+```text
+/new Supplier comparison
+/source ./supplier-notes.txt
+Compare the supplied proposals and prepare a recommendation with sources.
+/messages
+/work
+/task TASK_ID
+/steer TASK_ID "Prioritize delivery time over price."
+/resume TASK_ID "Use the source I just added."
+/cancel TASK_ID
+/conversations
+/use CONVERSATION_ID
+```
+
+One-shot chat: `uv run feya ask "What can you help with?"`. `/source` reads only the text file you explicitly name. The selected conversation and pending message ID are stored under ignored `.local`; PostgreSQL stores the conversation itself. Closing a browser or terminal does not cancel work. Restarting the worker resumes committed assignments.
+
+This version has two read-only case tools and operator-supplied text sources. It cannot browse the web, inspect arbitrary files, send messages or execute provider actions from chat. Sources and history are context, never authority. Source IDs are checked, but generated analysis and recommendations still need your review. Business actions still require the existing case/gateway path. Each task generation has at most four reasoning requests; an interrupted request still consumes a reservation. A conversation accepts at most eight text sources totalling 14,000 UTF-8 bytes including metadata; individual sources are capped at 12,000 characters. Context limits are explicit, and work that cannot fit asks for shorter input. There is no automatic billing fallback.
+
+The offline fixture demonstrates delegation and recovery but returns labelled source excerpts rather than authored analysis. Select a live model below for substantive conversations and deliverables. This is the first conversation/delegation slice of the [product development map](docs/research/03_PRODUCT_DEVELOPMENT_MAP.md), not the entire roadmap.
 
 ## Try the complete journey
 
@@ -135,9 +161,11 @@ npm --prefix apps/console run build
 uv run playwright install chromium
 uv run python scripts/browser_check.py
 uv run python scripts/recovery_check.py
+uv run python scripts/conversation_browser_check.py
+uv run python scripts/work_recovery_check.py
 ```
 
-The last two scripts create **synthetic demo cases** in the local workspace. The recovery script deliberately kills only this checkout's worker, approves while it is stopped, restarts it, and re-delivers outbox events. Core tests use unique test tenants and never delete the demo's data. `FEYA_TEST_DATABASE_URL` can select a separate test PostgreSQL database after applying the migration there.
+The case browser and recovery scripts create **synthetic demo cases** in the local workspace. The conversation browser check uses route fixtures. The work recovery check requires `FEYA_RUNNER=fixture` and creates a synthetic conversation, stops only this checkout’s worker, resumes a task while it is stopped, and verifies replay after restart. The recovery script deliberately kills only this checkout's worker, approves while it is stopped, restarts it, and re-delivers outbox events. Core tests use unique test tenants and never delete the demo's data. `FEYA_TEST_DATABASE_URL` can select a separate test PostgreSQL database after applying the migration there.
 
 Coverage includes concurrent duplicate ingestion/commits, exact approval binding, expiry, stale evidence, tenant references, prompt-injection proposals, wrong recipients/rates, manual handling, read-back differences, lost responses and second-pack portability. See [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md) for observed results and limits.
 
@@ -146,7 +174,8 @@ Coverage includes concurrent duplicate ingestion/commits, exact approval binding
 - `src/feya/domain.py`, `packs.py`, `policy.py`: contracts, state transitions, deterministic business rules.
 - `service.py`, `db.py`, `migrations/`: business state, evidence, append-only audit, transactional outbox.
 - `workflows.py`, `worker.py`: outer Temporal workflow and activities; reasoning is not doubly wrapped in a second durable runtime.
-- `agents.py`: bounded, tool-free reasoning process and explicit provider adapters.
+- `agents.py`, `conversation_agent.py`: bounded reasoning and explicit provider adapters; tool requests are structured proposals.
+- `work.py`, `work_db.py`, `conversation_models.py`: saved conversations, standalone tasks, bounded read-only tools and Markdown results.
 - `gateway.py`: exact action authorization, attempt journal, simulated providers and independent read-back.
 - `api.py`, `apps/console/`: local operator workspace.
 - `packs/`: independent synthetic service and consulting packs.
@@ -154,7 +183,7 @@ Coverage includes concurrent duplicate ingestion/commits, exact approval binding
 
 ## Boundaries and next work
 
-This is an intentionally **single-workspace, loopback-only, synthetic prototype**. The local operator identity is explicit development identity, not production authentication. The database role is a local development role; process separation is not a hardened container/IAM boundary. Real Gmail/Billit/Calendar connectors, OIDC, production DB grants/egress isolation, attachments, policy rollout, generalist chat, draft editing/versioning, full competitor bake-off, and release packaging remain pending.
+This is an intentionally **single-workspace, loopback-only, synthetic prototype**. The local operator identity is explicit development identity, not production authentication. The database role is a local development role; process separation is not a hardened container/IAM boundary. Real Gmail/Billit/Calendar connectors, OIDC, production DB grants/egress isolation, PDF/office attachments, web research, long-term memory, policy rollout, draft editing/versioning, full competitor bake-off, and release packaging remain pending.
 
 Do not expose this API publicly or attach customer credentials to the fake providers. Publishing the source does not establish production readiness. Application services, credentials and runtime data remain local.
 

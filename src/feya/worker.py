@@ -8,12 +8,14 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from feya import db as tables
+from feya import work_db
 from feya.config import settings
 from feya.db import make_engine, scope
 from feya.domain import AgentResult
 from feya.packs import load_packs
 from feya.service import Service
-from feya.workflows import CaseWorkflow
+from feya.work import WorkService
+from feya.workflows import CaseWorkflow, ConversationWorkflow
 
 QUEUE = "feya-cases-v1"
 log = logging.getLogger(__name__)
@@ -22,6 +24,7 @@ log = logging.getLogger(__name__)
 class Activities:
     def __init__(self, service: Service):
         self.service = service
+        self.work = WorkService(service.engine, service.tenant, service)
 
     @activity.defn(name="process_case_event")
     async def process(self, event_id: str):
@@ -77,6 +80,21 @@ class Activities:
             )
 
 
+    @activity.defn(name="process_work_event")
+    async def process_work(self, event_id: str):
+        async def run(task):
+            async with httpx.AsyncClient(timeout=100) as client:
+                response = await client.post(
+                    settings.agent_url + "/conversation/run",
+                    headers={"Authorization": "Bearer " + settings.agent_token},
+                    json=task.model_dump(),
+                )
+                response.raise_for_status()
+                return response.json()
+
+        return await self.work.process_event(event_id, run)
+
+
 async def dispatch(service: Service, client: Client, *, once=False):
     while True:
         with service.engine.connect() as db:
@@ -106,6 +124,26 @@ async def dispatch(service: Service, client: Client, *, once=False):
                     .where(scope(tables.outbox, service.tenant, event["id"]))
                     .values(published=True)
                 )
+        with service.engine.connect() as db:
+            work_events = [dict(r) for r in db.execute(
+                select(work_db.events).where(
+                    scope(work_db.events, service.tenant), work_db.events.c.published.is_(False)
+                ).order_by(work_db.events.c.created_at, work_db.events.c.sequence).limit(100)
+            ).mappings()]
+        for event in work_events:
+            object_id = event["task_id"] or event["conversation_id"]
+            await client.start_workflow(
+                ConversationWorkflow.run,
+                args=[object_id, []],
+                id=f"{service.tenant}/work/{object_id}/v1",
+                task_queue=QUEUE,
+                start_signal="event",
+                start_signal_args=[event["id"]],
+            )
+            with service.engine.begin() as db:
+                db.execute(update(work_db.events).where(
+                    scope(work_db.events, service.tenant, event["id"])
+                ).values(published=True))
         if once:
             return
         await asyncio.sleep(0.5)
@@ -129,7 +167,8 @@ async def main():
             await asyncio.sleep(2)
     activities = Activities(service)
     async with Worker(
-        client, task_queue=QUEUE, workflows=[CaseWorkflow], activities=[activities.process]
+        client, task_queue=QUEUE, workflows=[CaseWorkflow, ConversationWorkflow],
+        activities=[activities.process, activities.process_work]
     ):
         while True:
             try:

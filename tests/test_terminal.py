@@ -219,3 +219,118 @@ async def test_company_case_uses_custom_rates_and_gateway(service, gateway, tmp_
     )
     gateway.commit(action["id"])
     assert service.detail(case_id)["phase"] == "completed"
+
+
+def install_conversation_api(monkeypatch, *, lost_response=False, pending=0, failed_poll=False):
+    calls = []
+    messages = []
+    failed_once = False
+
+    def respond(request):
+        nonlocal failed_once
+        body = json.loads(request.content) if request.content else None
+        path = request.url.path
+        calls.append((request.method, path, body))
+        if path == "/v1/workspace":
+            return httpx.Response(200, json={"tenant_id": "tenant_demo", "packs": []})
+        if path == "/v1/conversations" and request.method == "POST":
+            return httpx.Response(201, json={"id": "conv_1", "title": body["title"]})
+        if path.endswith("/messages"):
+            if not messages:
+                messages.extend([
+                    {"id": "msg_1", "role": "user", "content": body["content"], "sequence": 1},
+                    {"id": "msg_2", "role": "assistant", "content": "Hello\x1b[2J", "sequence": 2},
+                ])
+            if lost_response and not failed_once:
+                failed_once = True
+                raise httpx.ReadTimeout("lost response", request=request)
+            return httpx.Response(202, json={"message_id": "msg_1", "deduplicated": failed_once})
+        if path == "/v1/conversations/conv_1":
+            if failed_poll:
+                raise httpx.ReadTimeout("poll unavailable", request=request)
+            return httpx.Response(200, json={"id": "conv_1", "messages": messages, "pending": pending})
+        if path == "/v1/tasks/task_1" and request.method == "GET":
+            return httpx.Response(200, json={"id": "task_1", "version": 3, "status": "running"})
+        return httpx.Response(200, json={"status": "accepted"})
+
+    client = httpx.Client
+    monkeypatch.setattr(terminal.httpx, "Client", lambda **kwargs: client(
+        transport=httpx.MockTransport(respond), **kwargs
+    ))
+    return calls
+
+
+def test_shell_only_slash_commands_can_execute(monkeypatch, tmp_path):
+    calls = []
+    answers(monkeypatch, ["down", "write 'a draft", "/cases", "/exit"])
+    monkeypatch.setattr(terminal.subprocess, "run", lambda args, **kwargs: calls.append(args))
+    terminal.shell(tmp_path)
+    assert calls[0][-3:] == ["ask", "--", "down"]
+    assert calls[1][-3:] == ["ask", "--", "write 'a draft"]
+    assert calls[2][-1] == "cases"
+
+
+def test_conversation_selection_is_private_and_reused(tmp_path, monkeypatch, capsys):
+    calls = install_conversation_api(monkeypatch)
+    company_file = tmp_path / "company.yaml"
+    terminal.converse("ask", None, "Hello", tmp_path, company_file, "tenant_demo")
+    state = next((tmp_path / ".local").glob("conversation-*.json"))
+    assert state.stat().st_mode & 0o777 == 0o600
+    assert json.loads(state.read_text()) == {"conversation_id": "conv_1"}
+    terminal.converse("messages", None, "", tmp_path, company_file, "tenant_demo")
+    assert len([item for item in calls if item[:2] == ("POST", "/v1/conversations")]) == 1
+    output = capsys.readouterr().out
+    assert "Hello" in output and "\x1b" not in output and r"\u001b" in output
+
+
+def test_chat_lost_response_reuses_request_id_and_blocks_changed_retry(tmp_path, monkeypatch):
+    calls = install_conversation_api(monkeypatch, lost_response=True)
+    args = (tmp_path, tmp_path / "company.yaml", "tenant_demo")
+    with pytest.raises(httpx.ReadTimeout):
+        terminal.converse("ask", None, "Prepare report", *args)
+    with pytest.raises(ValueError, match="uncertain delivery"):
+        terminal.converse("ask", None, "Different message", *args)
+    terminal.converse("ask", None, "Prepare report", *args)
+    posts = [item[2] for item in calls if item[1].endswith("/messages")]
+    assert len(posts) == 2 and posts[0] == posts[1]
+    state = json.loads(next((tmp_path / ".local").glob("conversation-*.json")).read_text())
+    assert "pending" not in state
+
+
+def test_chat_returns_prompt_when_reply_is_still_pending(tmp_path, monkeypatch, capsys):
+    install_conversation_api(monkeypatch, pending=1)
+    terminal.converse("ask", None, "Hello", tmp_path, tmp_path / "company.yaml",
+                      "tenant_demo", wait_seconds=0)
+    assert "background" in capsys.readouterr().out
+
+
+def test_accepted_message_poll_failure_does_not_suggest_resending(tmp_path, monkeypatch, capsys):
+    install_conversation_api(monkeypatch, failed_poll=True)
+    terminal.converse("ask", None, "Hello", tmp_path, tmp_path / "company.yaml", "tenant_demo")
+    assert "without resending" in capsys.readouterr().out
+
+
+def test_conversation_guard_prevents_writes_for_other_tenant(tmp_path, monkeypatch):
+    writes, _ = install_api(monkeypatch)
+    with pytest.raises(ValueError, match="differs"):
+        terminal.converse("ask", None, "Hello", tmp_path, tmp_path / "company.yaml", "other")
+    assert writes == []
+    assert not (tmp_path / ".local").exists()
+
+
+def test_source_reads_only_explicit_bounded_text_and_task_commands_use_version(tmp_path, monkeypatch):
+    calls = install_conversation_api(monkeypatch)
+    args = (tmp_path, tmp_path / "company.yaml", "tenant_demo")
+    terminal.converse("use", "conv_1", "", *args)
+    source = tmp_path / "handbook.txt"
+    source.write_text("Payment within 30 days.")
+    terminal.converse("source", None, str(source), *args)
+    assert calls[-1][2] == {"title": "handbook.txt", "content": "Payment within 30 days."}
+    source.write_bytes(b"binary\x00data")
+    with pytest.raises(ValueError, match="must be text"):
+        terminal.converse("source", None, str(source), *args)
+    for command, text in [("steer", "Focus on cost"), ("cancel", ""), ("resume", "Use new source")]:
+        terminal.converse(command, "task_1", text, *args)
+        assert calls[-1] == ("POST", f"/v1/tasks/task_1/{command}", {
+            "expected_version": 3, "instruction": text,
+        })

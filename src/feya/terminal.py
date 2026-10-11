@@ -1,15 +1,21 @@
 """Small command shell over the same local API used by the browser."""
 
+import hashlib
 import json
 import os
 import shlex
 import subprocess
 import sys
+import tempfile
+import time
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
 from pydantic import TypeAdapter
 
+from feya.conversation_models import ConversationMessage, SourceCreate
 from feya.domain import Decision, Identifier
 from feya.packs import load_company
 
@@ -25,6 +31,17 @@ HELP = """/setup, /onboard        Configure the local company and rates (stop ap
 /approve CASE_ID        Review and approve one exact pending offer
 /reject CASE_ID         Review and reject one exact pending offer
 /recheck ACTION_ID      Queue provider reconciliation
+/new [TITLE]           Start a conversation
+/conversations         List conversations
+/use CONVERSATION_ID   Select a saved conversation
+/messages              Read the selected conversation
+/source PATH           Attach an explicit UTF-8 text file
+/work                  List delegated tasks
+/task TASK_ID          Inspect progress and saved result
+/steer TASK_ID TEXT     Change a task objective
+/cancel TASK_ID         Cancel a task
+/resume TASK_ID TEXT    Resume with additional instructions
+Type naturally         Talk to Feya and delegate work
 /help                  Show commands
 /exit                  Leave the terminal; services keep running"""
 COMMANDS = {
@@ -42,6 +59,8 @@ COMMANDS = {
     "recheck",
     "help",
     "exit",
+    "new", "conversations", "use", "messages", "source", "work",
+    "task", "steer", "cancel", "resume",
 }
 
 
@@ -86,6 +105,11 @@ def shell(root: Path):
             line = input("feya > ").strip()
             if not line:
                 continue
+            if not line.startswith("/"):
+                subprocess.run(
+                    [sys.executable, "-m", "feya.cli", "ask", "--", line], cwd=root, check=False
+                )
+                continue
             words = shlex.split(line)
             command = words[0].removeprefix("/")
             if command == "exit":
@@ -94,7 +118,7 @@ def shell(root: Path):
                 print(HELP)
                 continue
             if command not in COMMANDS:
-                print("Use /help for available commands. Natural-language chat is not implemented.")
+                print("Use /help for available commands.")
                 continue
             subprocess.run(
                 [sys.executable, "-m", "feya.cli", command, *words[1:]], cwd=root, check=False
@@ -142,9 +166,8 @@ def review(case: dict, actions: list[dict]):
             show({key: result[key] for key in ("passed", "checked_fields")})
 
 
-def operate(command: str, identifier: str | None, company_file: Path, tenant_id: str):
-    if identifier is not None:
-        TypeAdapter(Identifier).validate_python(identifier)
+@contextmanager
+def workspace_api(company_file: Path, tenant_id: str):
     company = load_company(company_file)
     with httpx.Client(
         base_url="http://127.0.0.1:8010/v1/",
@@ -173,6 +196,13 @@ def operate(command: str, identifier: str | None, company_file: Path, tenant_id:
             )
         ):
             raise ValueError("Running company setup is stale. Run /down then /up.")
+        yield request, expected_company
+
+
+def operate(command: str, identifier: str | None, company_file: Path, tenant_id: str):
+    if identifier is not None:
+        TypeAdapter(Identifier).validate_python(identifier)
+    with workspace_api(company_file, tenant_id) as (request, expected_company):
         if command == "cases":
             cases = request("cases")
             if not cases:
@@ -210,3 +240,119 @@ def operate(command: str, identifier: str | None, company_file: Path, tenant_id:
             )
             show(request(f"approvals/{action['id']}/decide", decision.model_dump()))
             print("Decision recorded. Inspect the case for execution and provider verification.")
+
+
+def save_session(path: Path, state: dict):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            json.dump(state, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def converse(command: str, identifier: str | None, text: str, root: Path,
+             company_file: Path, tenant_id: str, *, wait_seconds: float = 20):
+    if command in {"use", "task", "steer", "cancel", "resume"}:
+        TypeAdapter(Identifier).validate_python(identifier)
+    filename = "conversation-" + hashlib.sha256(tenant_id.encode()).hexdigest() + ".json"
+    state_path = root / ".local" / filename
+    with workspace_api(company_file, tenant_id) as (request, _):
+        state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        conversation_id = state.get("conversation_id")
+        if conversation_id:
+            TypeAdapter(Identifier).validate_python(conversation_id)
+        if command in {"conversations", "work"}:
+            show(request("conversations" if command == "conversations" else "tasks"))
+            return
+        if command == "task":
+            show(request(f"tasks/{identifier}"))
+            return
+        if command in {"steer", "cancel", "resume"}:
+            task = request(f"tasks/{identifier}")
+            show(request(f"tasks/{identifier}/{command}", {
+                "expected_version": task["version"], "instruction": text,
+            }))
+            return
+        if command == "new":
+            if state.get("pending"):
+                raise ValueError("A message has uncertain delivery. Repeat that message before /new.")
+            conversation = request("conversations", {"title": text or "New conversation"})
+            save_session(state_path, {"conversation_id": conversation["id"]})
+            show(conversation)
+            return
+        if command == "use":
+            if state.get("pending"):
+                raise ValueError("A message has uncertain delivery. Repeat that message before /use.")
+            conversation = request(f"conversations/{identifier}")
+            save_session(state_path, {"conversation_id": conversation["id"]})
+            show(conversation)
+            return
+        if not conversation_id:
+            if command != "ask":
+                raise ValueError("Select a conversation with /new or /use first.")
+            conversation = request("conversations", {"title": text[:160] or "New conversation"})
+            conversation_id = conversation["id"]
+            state = {"conversation_id": conversation_id}
+            save_session(state_path, state)
+        if command == "messages":
+            show(request(f"conversations/{conversation_id}"))
+        elif command == "source":
+            path = Path(text).expanduser()
+            if not path.is_file():
+                raise ValueError("Source must be an explicit UTF-8 text file.")
+            with path.open("rb") as stream:
+                raw = stream.read(48001)
+            if len(raw) > 48000 or b"\x00" in raw:
+                raise ValueError("Source must be text with at most 12,000 characters.")
+            source = SourceCreate(title=path.name, content=raw.decode("utf-8"))
+            show(request(f"conversations/{conversation_id}/sources", source.model_dump()))
+        elif command == "ask":
+            pending = state.get("pending")
+            if pending and pending["content"] != text:
+                raise ValueError(
+                    "Previous message has uncertain delivery. Use /messages, then repeat the exact "
+                    "previous message to safely resolve it before sending another."
+                )
+            message = ConversationMessage(
+                content=text, request_id=pending["request_id"] if pending else "req_" + uuid.uuid4().hex
+            )
+            state["pending"] = message.model_dump()
+            save_session(state_path, state)
+            try:
+                receipt = request(f"conversations/{conversation_id}/messages", message.model_dump())
+            except httpx.HTTPStatusError as exc:
+                if 400 <= exc.response.status_code < 500:
+                    state.pop("pending")
+                    save_session(state_path, state)
+                raise
+            state.pop("pending")
+            save_session(state_path, state)
+            print(f"Message accepted in {conversation_id}. /messages reads later replies.")
+            deadline = time.monotonic() + wait_seconds
+            while True:
+                try:
+                    conversation = request(f"conversations/{conversation_id}")
+                except httpx.HTTPError:
+                    print("Message accepted; reply check unavailable. Use /messages without resending.")
+                    return
+                messages = conversation["messages"]
+                replies = [item for item in messages if item.get("reply_to") == receipt["message_id"]]
+                if replies:
+                    for item in replies:
+                        show(item)
+                    return
+                if not conversation.get("pending"):
+                    origin = next(m["sequence"] for m in messages if m["id"] == receipt["message_id"])
+                    for item in messages:
+                        if item["sequence"] > origin and item["role"] != "user":
+                            show(item)
+                    return
+                if time.monotonic() >= deadline:
+                    print("Still working in the background. Use /messages or /work for progress.")
+                    return
+                time.sleep(min(0.5, max(0, deadline - time.monotonic())))

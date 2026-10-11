@@ -221,6 +221,17 @@ def main():
     sub.add_parser("doctor", aliases=["status"])
     sub.add_parser("demo").add_argument("--pack")
     sub.add_parser("cases")
+    for command in ("conversations", "messages", "work"):
+        sub.add_parser(command)
+    sub.add_parser("new").add_argument("text", nargs="*")
+    sub.add_parser("ask").add_argument("text", nargs="+")
+    sub.add_parser("source").add_argument("text")
+    for command in ("use", "task", "cancel"):
+        sub.add_parser(command).add_argument("identifier")
+    for command in ("steer", "resume"):
+        task_command = sub.add_parser(command)
+        task_command.add_argument("identifier")
+        task_command.add_argument("text", nargs="+")
     for command in ("case", "reply", "approve", "reject", "recheck"):
         sub.add_parser(command).add_argument("identifier")
     pack = sub.add_parser("pack")
@@ -267,6 +278,20 @@ def main():
             settings.company_file,
             settings.tenant_id,
         )
+    elif args.command in {
+        "ask", "new", "conversations", "use", "messages", "source", "work",
+        "task", "steer", "cancel", "resume",
+    }:
+        from feya.config import settings
+        from feya.terminal import converse
+
+        source_text = getattr(args, "text", "")
+        text = " ".join(source_text) if isinstance(source_text, list) else source_text
+        company_file = settings.company_file
+        if not company_file.is_absolute():
+            company_file = ROOT / company_file
+        converse(args.command, getattr(args, "identifier", None), text, ROOT,
+                 company_file, settings.tenant_id)
     elif args.command == "test":
         sys.exit(subprocess.call([sys.executable, "-m", "pytest", "-q"], cwd=ROOT))
 
@@ -286,7 +311,8 @@ def entrypoint():
         sys.exit(1)
     except httpx.RequestError:
         print(
-            "Local API unavailable or request interrupted. Use feya status; inspect the case before retrying a write.",
+            "Local API unavailable or request interrupted. Inspect /messages, /work or /case before retrying a write. "
+            "For an interrupted chat message, repeat its exact text to retry without duplication.",
             file=sys.stderr,
         )
         sys.exit(1)

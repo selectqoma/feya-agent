@@ -1,6 +1,6 @@
 # How Feya Agent works
 
-Feya organizes work around a case: the incoming request, its evidence, missing facts, proposed actions, approvals and observed outcomes. The current implementation handles one enquiry-to-quote workflow with two business packs.
+Feya supports conversations and independent delegated tasks alongside business cases. A case records the incoming request, its evidence, missing facts, proposed actions, approvals and observed outcomes. The current implementation handles one enquiry-to-quote workflow with two business packs.
 
 ## A case from start to finish
 
@@ -13,12 +13,22 @@ Feya organizes work around a case: the incoming request, its evidence, missing f
 
 PostgreSQL owns business state. Temporal owns workflow execution and durable waits. The model proposes facts; it does not calculate authoritative prices, grant approvals or call business-provider tools.
 
+## Conversation and delegated tasks
+
+A chat message and its work event commit together in PostgreSQL, with a client request ID for duplicate suppression. Conversation events run in order. A reasoning step may answer, ask for input, request a read-only case tool, or delegate an objective and deliverable. Delegation creates a task and a separate durable workflow, so the conversation can continue independently.
+
+The trusted worker executes only `list_cases` and `read_case`, scoped to its workspace. Sources are immutable snapshots for a generation. Task outputs have no provider-write authority. A completed task saves Markdown and posts the result to its originating conversation. Missing material leaves the task waiting for input; an operator can add sources and resume it.
+
+Four persisted model-call reservations bound each event, including uncertain calls after interruption. A lease rejects duplicate execution results; a task generation rejects stale results after steering or cancellation. An in-flight read/model call may finish after cancellation, but it cannot publish a result for the cancelled generation. Paused and failed tasks can resume with a fresh generation and budget; cancelled and completed tasks are terminal. Model-call budgets are finite per generation, not a company-wide spend cap.
+
+`work_db.py` has separate metadata and an additive migration, preserving existing case data. PostgreSQL owns messages, sources, tasks, progress and the outbox; Temporal coordinates the work. There is one durability engine. The API and CLI expose the same task state, version checks and downloads.
+
 ## What can be reused
 
 | Layer | Current extension point | Limit |
 |---|---|---|
 | Business rules | YAML packs define required facts, service rates, currency, tax and reply wording | Both supplied packs use the same enquiry-to-quote workflow |
-| Reasoning | Offline fixture, PydanticAI model adapter, or official Claude CLI adapter | Structured extraction only; not a general tool-using agent suite |
+| Reasoning | Offline fixture, PydanticAI model adapter, or official Claude CLI adapter | Extraction plus bounded conversation/task reasoning; only supplied text and read-only case tools |
 | Case infrastructure | Evidence, approvals, audit, outbox, execution attempts and verification | New business workflows still need code and tests |
 | Providers | Email and accounting simulators with failure injection | Real connectors are not implemented; there is no stable public connector SDK |
 | Operator workspace | Queue, case detail, sources, approvals, reconciliation and export | No contact/account CRM, role administration or general workflow designer |
